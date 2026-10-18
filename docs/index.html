@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Testimony: Pics or It Didn't Happen | Test evidence for Chrome</title>
+  <meta name="description" content="Testimony is a Chrome extension that records your manual test steps as annotated screenshots and downloads them as a PDF you can attach to a ticket. Nothing leaves your computer.">
+  <link rel="canonical" href="https://kyashwanth.github.io/testimony/">
+  <link rel="icon" type="image/png" href="assets/favicon-32.png">
+  <meta name="theme-color" content="#2563eb">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Testimony: Pics or It Didn't Happen">
+  <meta property="og:description" content="Click through your test. Get a PDF of every step with screenshots, notes and results. Private by design.">
+  <meta property="og:url" content="https://kyashwanth.github.io/testimony/">
+  <meta property="og:image" content="https://kyashwanth.github.io/testimony/assets/social-card.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="assets/icon-128.png" alt="" width="30" height="30">Testimony</a>
+      <nav aria-label="Main">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#faq">FAQ</a>
+        <a href="#about">About</a>
+        <a href="https://github.com/kyashwanth/testimony">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="wrap">
+        <div>
+          <span class="eyebrow">Test evidence for Chrome</span>
+          <h1>Pics or it didn't happen.</h1>
+          <p class="lead">Testimony turns a manual test session into proof you can attach to a ticket. Click through your test as normal, then download a PDF of every step with its screenshot, notes and result.</p>
+          <div class="cta">
+            <span class="btn soon" role="note">Coming soon to the Chrome Web Store</span>
+            <a class="btn" href="https://github.com/kyashwanth/testimony">View on GitHub</a>
+          </div>
+          <p class="note">Works in Chrome 102 or later. No account. Nothing leaves your computer.</p>
+        </div>
+        <div class="frame">
+          <img src="assets/shot-overview.jpg" width="1280" height="800" alt="The Testimony editor showing a test session with four steps, each with a screenshot, a note and a Pass marker">
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>Everything a UAT sign-off needs, nothing it doesn't</h2>
+        <p class="sub">Testers lose hours taking screenshots, pasting them into documents and writing up what happened. Testimony does the capturing so you can do the testing.</p>
+        <div class="grid f3">
+          <div class="card"><h3>Records as you test</h3><p>Every click, typed field and dropdown choice becomes a step with a screenshot, named for you: "Click the 'Save' button", "Selected 'INR' in the 'Currency' dropdown".</p></div>
+          <div class="card"><h3>Captures the result</h3><p>Screenshots are taken just after each action, so the success message or new table row is in the picture. A final screenshot is added when you stop.</p></div>
+          <div class="card"><h3>Annotate and redact</h3><p>Draw boxes, arrows, circles, highlights and text labels in five colours. Black out anything sensitive before you share.</p></div>
+          <div class="card"><h3>Notes, Pass and Fail</h3><p>Write what you expected and what you saw. Mark each step Pass or Fail, and the overall result is worked out for you.</p></div>
+          <div class="card"><h3>Follows new tabs</h3><p>Payment pop-ups and links that open in a new tab are part of the recording, labelled Tab 1, Tab 2 and so on. You are warned if a tab is not being recorded.</p></div>
+          <div class="card"><h3>History you can trust</h3><p>Starting a new session saves the old one. The last five sessions are kept, and each can be restored or exported again.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="soft">
+      <div class="wrap">
+        <h2>How it works</h2>
+        <p class="sub">From first click to finished PDF in three steps.</p>
+        <div class="grid f3">
+          <div class="card"><span class="num">1</span><h3>Allow your test site</h3><p>Enter the ticket and environment, then press Allow site and start recording. Chrome asks you once, for that site only.</p></div>
+          <div class="card"><span class="num">2</span><h3>Test as normal</h3><p>Work through your scenario. Each action is captured as a step with a screenshot and a marker where you clicked.</p></div>
+          <div class="card"><span class="num">3</span><h3>Review and download</h3><p>Press Stop, add notes, mark Pass or Fail, annotate if needed, and download one PDF to attach to your ticket.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="see">
+      <div class="wrap">
+        <h2 id="see">See it in action</h2>
+        <p class="sub">Screenshots use demo data.</p>
+        <div class="shots">
+          <div class="shot">
+            <div class="txt"><h3>Annotate what matters</h3><p>Circle the result, box the row, label the message. Redact anything private. Your marks are baked into the PDF.</p></div>
+            <div class="frame"><img src="assets/shot-annotate.jpg" width="1280" height="800" loading="lazy" alt="The annotation editor with a green box around a success message, a red box around a new table row and a text label reading Success message shown"></div>
+          </div>
+          <div class="shot">
+            <div class="txt"><h3>One site at a time</h3><p>Nothing is granted when you install. You approve each site yourself, see what is allowed, and remove it whenever you like.</p></div>
+            <div class="frame"><img src="assets/shot-permissions.jpg" width="1280" height="800" loading="lazy" alt="Two Testimony popups side by side: one asking to allow a site before recording, one showing recording in progress with the site allowed"></div>
+          </div>
+          <div class="shot">
+            <div class="txt"><h3>A clean PDF for the ticket</h3><p>Ticket, environment, tester, date, overall result and summary up front, then every step with its screenshot, note and status.</p></div>
+            <div class="frame"><img src="assets/shot-pdf.jpg" width="1280" height="800" loading="lazy" alt="Two pages of an exported PDF report showing a summary with a green Pass badge and the first two steps with screenshots"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy" class="soft">
+      <div class="wrap">
+        <h2>Private by design</h2>
+        <p class="sub">Test sessions often touch real systems. Testimony is built so your screenshots never leave your computer.</p>
+        <div class="grid f3">
+          <div class="card"><h3>Nothing is sent anywhere</h3><p>No account, no server, no analytics. Screenshots, notes and history are stored in your browser only.</p></div>
+          <div class="card"><h3>Never reads what you type</h3><p>Only the name of a field is recorded, such as "Typed in the 'Email' field". The text you enter is not read or stored.</p></div>
+          <div class="card"><h3>Only where you allow</h3><p>It watches for clicks only on sites you approved, and only while you are recording. Remove a site at any time.</p></div>
+        </div>
+        <p style="margin-top:28px"><a href="privacy.html">Read the full privacy policy</a></p>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <h2>Questions</h2>
+        <p class="sub">Short answers to the common ones.</p>
+        <details><summary>Does Testimony send my screenshots anywhere?</summary><p>No. Everything stays in your browser on your computer, and the extension makes no network requests. You choose where the PDF goes.</p></details>
+        <details><summary>Why does it ask for permission for each site?</summary><p>So it can only see the sites you are testing. Chrome shows the request once per site, and you can remove a site from the popup at any time.</p></details>
+        <details><summary>Does it record what I type into fields?</summary><p>No. It records that you typed in a named field, never the text. Screenshots do show what is on screen, so use the redact tool before sharing a PDF if a screen contains sensitive information.</p></details>
+        <details><summary>Where do I use the PDF?</summary><p>Anywhere that accepts a file: attach it to a Jira or other ticket, add it to a test run, or send it to a stakeholder as sign-off evidence.</p></details>
+        <details><summary>Which browsers does it support?</summary><p>Google Chrome 102 or later.</p></details>
+        <details><summary>Can I change the keyboard shortcuts?</summary><p>Yes, at chrome://extensions/shortcuts. The defaults are Alt+Shift+S to capture a screenshot and Alt+Shift+R to stop or start recording.</p></details>
+      </div>
+    </section>
+
+    <section id="about" class="soft">
+      <div class="wrap">
+        <h2>About the author</h2>
+        <div class="about">
+          <img src="assets/icon-128.png" width="96" height="96" alt="Testimony icon">
+          <div>
+            <p>Testimony is built and maintained by Yashwanth Reddy. It started as a way to make UAT evidence quicker to capture and easier to trust.</p>
+            <p>Find out more about the author at <a href="https://kyashwanthreddy.co.in/" rel="author noopener">kyashwanthreddy.co.in</a>.</p>
+            <p>Found a bug or have an idea? <a href="https://github.com/kyashwanth/testimony/issues">Open an issue on GitHub</a>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      <span>&copy; 2026 Yashwanth Reddy</span>
+      <span class="links">
+        <a href="privacy.html">Privacy policy</a>
+        <a href="https://github.com/kyashwanth/testimony">GitHub</a>
+        <a href="https://kyashwanthreddy.co.in/" rel="author noopener">About the author</a>
+      </span>
+    </div>
+  </footer>
+</body>
+</html>

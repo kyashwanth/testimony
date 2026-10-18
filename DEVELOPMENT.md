@@ -31,6 +31,7 @@ the console of the page being tested.
 | `sites.js` | Pure helpers for validating and describing site match patterns |
 | `test/` | Node tests and browser harnesses |
 | `store-assets/` | Chrome Web Store graphics and the pages that generate them |
+| `docs/` | The website served by GitHub Pages: landing page and privacy policy |
 | `build.sh` | Runs all tests and writes the store zip |
 | `STORE-LISTING.md` | Copy and justifications for the Chrome Web Store form |
 | `PRIVACY.md` | Privacy policy (also the text to host for the store listing) |
@@ -130,6 +131,21 @@ marquee) and the pages that make them:
 
 Serve this folder over HTTP, render each page at the exact target size in a light-mode browser window, and
 export as JPEG or 24-bit PNG without alpha (the store rejects transparency). Use only demo data in graphics.
+
+## Website
+
+`docs/` is a static site with no build step, scripts, trackers or third-party fonts. Files: `index.html` (product
+page), `privacy.html` (privacy policy), `styles.css`, `assets/` (copies of the store graphics and icons).
+
+- **Publish it:** in the GitHub repo go to Settings > Pages, set Source to *Deploy from a branch*, branch `main`,
+  folder `/docs`. It is then served at https://kyashwanth.github.io/testimony/. A private repo needs a paid
+  GitHub plan for Pages, so make the repo public first on a free plan.
+- **Preview locally:** `cd docs && python3 -m http.server`, then open http://localhost:8000.
+- **Keep the policy in sync:** `PRIVACY.md` and `docs/privacy.html` carry the same text. Edit both, and update the
+  "Last updated" date.
+- **When the extension is published:** in `docs/index.html` replace the "Coming soon to the Chrome Web Store"
+  badge with a link to the listing, and update the install line in `README.md`.
+- **Canonical and social URLs** in the page `<head>` assume the address above. Change them if you add a custom domain.
 
 ## Releasing
 

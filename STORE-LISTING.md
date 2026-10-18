@@ -51,12 +51,15 @@ Nothing leaves the device, but declare conservatively, because the extension doe
 - No remote code, no analytics, no network requests.
 - Certify: not sold to third parties; not used for purposes unrelated to the single purpose; not used for creditworthiness or lending.
 
-## Privacy policy
-The store asks for a URL. Suggested text to host publicly (e.g. GitHub Pages):
+## Website, privacy policy and support URLs
+Once GitHub Pages is enabled (see DEVELOPMENT.md > Website), use:
+- **Homepage URL:** https://kyashwanth.github.io/testimony/
+- **Privacy policy URL:** https://kyashwanth.github.io/testimony/privacy.html
+- **Support URL:** https://github.com/kyashwanth/testimony/issues
+- **Official URL:** None (only for sites verified in Search Console).
 
-> Testimony does not collect, store on any server, share or sell any personal data. Screenshots, notes and
-> session details are saved only in your browser's local storage on your device and are deleted when you
-> choose "New session" or remove the extension. The extension makes no network requests.
+Open each in a private window first to confirm it loads without signing in. The policy text is `PRIVACY.md`,
+mirrored by `docs/privacy.html`.
 
 ## Assets (generated, in `store-assets/`, not shipped in the zip)
 Upload in this order under Store listing > Graphic assets:
