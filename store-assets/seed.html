@@ -1,0 +1,117 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>store screenshot seed</title>
+<script type="module">
+// Store-asset tooling only (not shipped in the zip). Fills the extension's database with a generic demo
+// session ("Acme Orders"), then opens the editor so it can be photographed.
+import * as db from '/db.js';
+
+const W = 1440, H = 900;
+const font = (s, w = 400) => `${w} ${s}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+function rr(x, g, y, w, h, r, fill, stroke) {
+  x.beginPath(); x.roundRect(g, y, w, h, r);
+  if (fill) { x.fillStyle = fill; x.fill(); }
+  if (stroke) { x.strokeStyle = stroke; x.lineWidth = 2; x.stroke(); }
+}
+function t(x, s, px, py, size, color = '#1f2937', weight = 400, align = 'left') {
+  x.font = font(size, weight); x.fillStyle = color; x.textAlign = align; x.textBaseline = 'middle'; x.fillText(s, px, py);
+}
+function canvas() { const c = document.createElement('canvas'); c.width = W; c.height = H; return [c, c.getContext('2d')]; }
+const blobOf = (c) => new Promise((r) => c.toBlob(r, 'image/jpeg', 0.92));
+
+function shell(x, active) {
+  x.fillStyle = '#f3f5f9'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#16233b'; x.fillRect(0, 0, 220, H);
+  t(x, 'Acme Orders', 28, 40, 24, '#fff', 700);
+  ['Dashboard', 'Orders', 'Customers', 'Reports', 'Settings'].forEach((n, i) => {
+    const y = 120 + i * 56;
+    if (n === active) rr(x, 12, y - 22, 196, 44, 8, '#2b3f63');
+    t(x, n, 36, y, 19, n === active ? '#fff' : '#a9b6cf', n === active ? 600 : 400);
+  });
+  x.fillStyle = '#fff'; x.fillRect(220, 0, W - 220, 64);
+  x.fillStyle = '#e5e8ef'; x.fillRect(220, 63, W - 220, 1);
+  x.beginPath(); x.arc(W - 48, 32, 18, 0, 7); x.fillStyle = '#c7d2fe'; x.fill();
+}
+
+function ordersTable(x, rows) {
+  rr(x, 260, 170, 1140, 64 * (rows.length + 1), 12, '#fff', '#e5e8ef');
+  ['Order', 'Customer', 'Currency', 'Amount', 'Status'].forEach((h, i) => t(x, h, [290, 420, 720, 880, 1130][i], 202, 17, '#6b7280', 600));
+  rows.forEach((r, i) => {
+    const y = 234 + i * 64;
+    if (r.hl) { x.fillStyle = '#ecfdf3'; x.fillRect(262, y, 1136, 64); }
+    x.fillStyle = '#e5e8ef'; x.fillRect(262, y, 1136, 1);
+    [r.id, r.who, r.cur, r.amt].forEach((v, j) => t(x, v, [290, 420, 720, 880][j], y + 32, 19, '#1f2937', j === 0 ? 600 : 400));
+    rr(x, 1128, y + 18, 96, 30, 15, r.st === 'Paid' ? '#dcfce7' : '#fef3c7');
+    t(x, r.st, 1176, y + 33, 15, r.st === 'Paid' ? '#166534' : '#92400e', 600, 'center');
+  });
+}
+
+const baseRows = [
+  { id: '#1041', who: 'Globex Ltd', cur: 'USD', amt: '1,250.00', st: 'Paid' },
+  { id: '#1040', who: 'Initech', cur: 'GBP', amt: '830.50', st: 'Pending' },
+  { id: '#1039', who: 'Umbrella Co', cur: 'EUR', amt: '4,100.00', st: 'Paid' },
+  { id: '#1038', who: 'Hooli', cur: 'USD', amt: '260.00', st: 'Paid' },
+];
+
+async function screens() {
+  const out = [];
+  // 1. login
+  let [c, x] = canvas();
+  const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#e0e7ff'); g.addColorStop(1, '#f5f3ff');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  rr(x, 470, 150, 500, 600, 18, '#fff', '#e5e8ef');
+  t(x, 'Acme Orders', 720, 215, 30, '#16233b', 700, 'center');
+  t(x, 'Sign in to continue', 720, 258, 18, '#6b7280', 400, 'center');
+  t(x, 'Email', 510, 322, 16, '#6b7280', 600); rr(x, 510, 342, 420, 54, 8, '#fff', '#cbd5e1'); t(x, 'jane@example.com', 530, 369, 19);
+  t(x, 'Password', 510, 432, 16, '#6b7280', 600); rr(x, 510, 452, 420, 54, 8, '#fff', '#cbd5e1'); t(x, '••••••••••', 530, 479, 19);
+  rr(x, 510, 550, 420, 58, 10, '#2563eb'); t(x, 'Sign in', 720, 579, 21, '#fff', 600, 'center');
+  out.push({ c, title: "Click the 'Sign in' button", note: 'Expected: dashboard opens after sign in. Actual: orders dashboard loads in about 2 s.', status: 'pass', url: 'https://uat.example.com/login', kind: 'click',
+    annotations: [{ type: 'ring', color: '#e5322d', lw: 5, x: 720, y: 579, r: 36 }] });
+
+  // 2. orders list
+  [c, x] = canvas(); shell(x, 'Orders');
+  t(x, 'Orders', 260, 118, 32, '#16233b', 700);
+  rr(x, 1190, 94, 210, 50, 10, '#2563eb'); t(x, 'New order', 1295, 119, 19, '#fff', 600, 'center');
+  ordersTable(x, baseRows);
+  out.push({ c, title: "Click the 'New order' button", note: '', status: 'pass', url: 'https://uat.example.com/orders', kind: 'click',
+    annotations: [{ type: 'ring', color: '#e5322d', lw: 5, x: 1295, y: 119, r: 36 }] });
+
+  // 3. new order form, currency chosen
+  [c, x] = canvas(); shell(x, 'Orders');
+  rr(x, 260, 100, 1140, 700, 14, '#fff', '#e5e8ef');
+  t(x, 'New order', 300, 150, 30, '#16233b', 700);
+  t(x, 'Customer', 300, 215, 16, '#6b7280', 600); rr(x, 300, 235, 1060, 54, 8, '#fff', '#cbd5e1'); t(x, 'Globex Ltd', 320, 262, 19);
+  t(x, 'Currency', 300, 335, 16, '#6b7280', 600); rr(x, 300, 355, 480, 54, 8, '#fff', '#cbd5e1'); t(x, 'INR', 320, 382, 19); t(x, '▾', 750, 382, 18, '#6b7280');
+  t(x, 'Amount', 830, 335, 16, '#6b7280', 600); rr(x, 830, 355, 530, 54, 8, '#fff', '#cbd5e1'); t(x, '250,000.00', 850, 382, 19);
+  t(x, 'Notes', 300, 455, 16, '#6b7280', 600); rr(x, 300, 475, 1060, 120, 8, '#fff', '#cbd5e1'); t(x, 'Bank statement deposit, INR account', 320, 508, 19, '#6b7280');
+  rr(x, 300, 690, 210, 56, 10, '#2563eb'); t(x, 'Create order', 405, 718, 20, '#fff', 600, 'center');
+  out.push({ c, title: "Selected 'INR' in the 'Currency' dropdown", note: 'Currency list offers INR; amount field accepts 250,000.00.', status: 'pass', url: 'https://uat.example.com/orders/new', kind: 'input',
+    annotations: [{ type: 'rect', color: '#e5322d', lw: 5, x: 292, y: 347, w: 496, h: 70 }] });
+
+  // 4. result
+  [c, x] = canvas(); shell(x, 'Orders');
+  t(x, 'Orders', 260, 118, 32, '#16233b', 700);
+  rr(x, 1190, 94, 210, 50, 10, '#2563eb'); t(x, 'New order', 1295, 119, 19, '#fff', 600, 'center');
+  ordersTable(x, [{ id: '#1042', who: 'Globex Ltd', cur: 'INR', amt: '250,000.00', st: 'Pending', hl: true }, ...baseRows.slice(0, 3)]);
+  rr(x, 960, 76, 440, 76, 12, '#16a34a'); t(x, '✓  Order #1042 created', 1180, 114, 21, '#fff', 600, 'center');
+  out.push({ c, title: "Click the 'Create order' button", note: 'Expected: success message and the new row at the top of the list. Actual: both shown.', status: 'pass', url: 'https://uat.example.com/orders', kind: 'click',
+    annotations: [
+      { type: 'rect', color: '#16a34a', lw: 5, x: 950, y: 68, w: 460, h: 92 },
+      { type: 'rect', color: '#e5322d', lw: 5, x: 262, y: 240, w: 1136, h: 56 },
+      { type: 'text', color: '#16a34a', text: 'Success message shown', x: 640, y: 84, size: 24 },
+    ] });
+  return out;
+}
+
+try {
+await db.clearSteps();
+await db.resetMeta({ ticket: 'PROJ-123', env: 'UAT, build 2026.10.18', tester: 'Jane Tester', date: '2026-10-18',
+  summary: 'Create an INR order and confirm it appears in the list with a success message.' });
+let i = 0;
+for (const s of await screens()) {
+  await db.addStep({ title: s.title, note: s.note, status: s.status, kind: s.kind, url: s.url, pageTitle: 'Acme Orders', tab: 1,
+    image: await blobOf(s.c), w: W, h: H, annotations: s.annotations, ts: Date.now() + i++ });
+}
+} catch (e) { document.body.textContent = 'SEED ERROR: ' + (e && e.stack || e); throw e; }
+location.href = '/editor.html';
+</script>

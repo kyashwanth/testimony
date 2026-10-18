@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Testimony</title>
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Testimony <span class="tag">Pics or It Didn't Happen</span></div>
+    <span id="recPill" class="pill" hidden>Recording</span>
+    <div class="spacer"></div>
+    <button id="btnAdd" class="ghost">Add images</button>
+    <input id="fileInput" type="file" accept="image/*" multiple hidden>
+    <button id="btnHistory" class="ghost">History</button>
+    <button id="btnNew" class="ghost">New session</button>
+    <button id="btnPdf" class="primary">Download PDF</button>
+  </header>
+
+  <main>
+    <section class="card meta" aria-label="Session details">
+      <label>Ticket<input id="ticket" placeholder="PROJ-123" autocomplete="off"></label>
+      <label>Environment / build<input id="env" placeholder="UAT, build 2026.09.19" autocomplete="off"></label>
+      <label>Tested by<input id="tester" placeholder="Your name" autocomplete="off"></label>
+      <label>Date<input id="date" type="date"></label>
+      <label>Overall result
+        <select id="result">
+          <option value="">Auto (from steps)</option>
+          <option value="pass">Pass</option>
+          <option value="fail">Fail</option>
+          <option value="blocked">Blocked</option>
+        </select>
+      </label>
+      <label class="wide">Summary <span class="opt">(optional)</span>
+        <textarea id="summary" rows="2" placeholder="What was tested, and anything worth knowing."></textarea>
+      </label>
+    </section>
+
+    <div id="empty" class="empty" hidden>
+      <h2>No steps yet</h2>
+      <p>Click the extension icon, press <b>Start recording</b>, and click through your test. Each click becomes a step with a screenshot.</p>
+      <p>You can also <b>paste</b> (Ctrl/Cmd+V) or <b>drop</b> screenshots onto this page.</p>
+    </div>
+    <div id="steps"></div>
+  </main>
+
+  <div id="annot" class="annot" hidden>
+    <div class="annot-bar">
+      <div id="tools" class="seg">
+        <button data-tool="rect">Box</button>
+        <button data-tool="arrow">Arrow</button>
+        <button data-tool="ring">Circle</button>
+        <button data-tool="highlight">Highlight</button>
+        <button data-tool="text">Text</button>
+        <button data-tool="redact">Redact</button>
+      </div>
+      <div id="swatches" class="swatches"></div>
+      <div class="spacer"></div>
+      <button id="aUndo" class="ghost">Undo</button>
+      <button id="aClear" class="ghost">Clear</button>
+      <button id="aCancel" class="ghost">Cancel</button>
+      <button id="aSave" class="primary">Save</button>
+    </div>
+    <div class="annot-stage">
+      <div id="aWrap" class="annot-wrap">
+        <canvas id="aCanvas"></canvas>
+        <input id="aText" class="annot-text" hidden placeholder="Type, then Enter">
+      </div>
+    </div>
+  </div>
+
+  <div id="historyModal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-labelledby="hTitle">
+      <div class="modal-head"><h2 id="hTitle">History</h2><button id="hClose" class="ghost">Close</button></div>
+      <p class="hint">Starting a new session saves the current one here. The last 5 are kept.</p>
+      <ul id="hList" class="hlist"></ul>
+      <p id="hEmpty" class="hint">No saved sessions yet.</p>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script type="module" src="editor.js"></script>
+</body>
+</html>

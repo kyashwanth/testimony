@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>legacy db seed</title>
+<script>
+// Test-only: builds a version-1 database (no "sessions" store) holding one step, then opens the editor,
+// so the browser exercises the real v1 -> v2 upgrade path.
+const req = indexedDB.open('uat-capture', 1);
+req.onupgradeneeded = () => {
+  const db = req.result;
+  db.createObjectStore('steps', { keyPath: 'id', autoIncrement: true });
+  db.createObjectStore('meta', { keyPath: 'key' });
+};
+req.onsuccess = async () => {
+  const db = req.result;
+  const c = document.createElement('canvas'); c.width = 400; c.height = 250;
+  const x = c.getContext('2d'); x.fillStyle = '#334'; x.fillRect(0, 0, 400, 250); x.fillStyle = '#fff'; x.font = '28px sans-serif'; x.fillText('legacy step', 30, 130);
+  const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
+  const tx = db.transaction(['steps', 'meta'], 'readwrite');
+  tx.objectStore('steps').add({ title: 'Legacy step from v1 database', note: 'survives upgrade', status: 'pass', kind: 'click', url: 'https://uat.example.com/', image: blob, w: 400, h: 250, annotations: [], ts: Date.now(), order: Date.now() });
+  tx.objectStore('meta').put({ key: 'session', value: { ticket: 'PROJ-LEGACY', tester: 'Jane Tester', env: 'UAT' } });
+  tx.oncomplete = () => { db.close(); location.href = '/editor.html'; };
+};
+</script>

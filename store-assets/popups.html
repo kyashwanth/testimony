@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>popup screenshot</title>
+<style>
+  html,body{margin:0;height:100%} body{background:linear-gradient(135deg,#e0e7ff,#f5f3ff);font:16px -apple-system,"Helvetica Neue",Arial,sans-serif;color:#16233b;overflow:hidden}
+  h1{margin:0;padding:34px 0 4px;text-align:center;font-size:42px;letter-spacing:-.5px} .sub{text-align:center;color:#4b5563;font-size:20px;margin-bottom:26px}
+  .row{display:flex;justify-content:center;gap:90px} .col{width:340px;text-align:center}
+  .frame{background:#fff;border-radius:16px;box-shadow:0 18px 50px rgba(30,41,90,.25);overflow:hidden;border:1px solid #d6dbea}
+  iframe{display:block;width:320px;height:548px;border:0;margin:6px auto}
+  .cap{margin-top:16px;font-size:20px;font-weight:600} .cap small{display:block;font-weight:400;color:#4b5563;font-size:16px;margin-top:4px}
+  .n{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#2563eb;color:#fff;font-size:16px;margin-right:8px}
+</style>
+<h1>Allow one site at a time</h1>
+<div class="sub">Nothing is granted at install. Record only where you test.</div>
+<div class="row">
+  <div class="col"><div class="frame"><iframe id="a" src="/test/popup-harness.html?tab=https://uat.example.com/login"></iframe></div>
+    <div class="cap"><span class="n">1</span>Allow the site you test<small>Chrome asks once, for that site only</small></div></div>
+  <div class="col"><div class="frame"><iframe id="b" src="/test/popup-harness.html?tab=https://uat.example.com/orders"></iframe></div>
+    <div class="cap"><span class="n">2</span>Record your test<small>Clicks, typing and dropdowns become steps</small></div></div>
+</div>
+<script>
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+(async () => {
+  const b = document.getElementById('b');
+  for (let i = 0; i < 80 && !(b.contentWindow.__mock && b.contentDocument.getElementById('toggle')); i++) await wait(100);
+  await wait(400);
+  const m = b.contentWindow.__mock;
+  m.granted = ['https://uat.example.com/*']; m.storage.recording = true;
+  b.contentWindow.chrome.permissions.onAdded.fire();
+  await wait(300);
+  b.contentDocument.getElementById('sites').open = true;
+  b.contentDocument.getElementById('opts').open = true;
+})();
+</script>

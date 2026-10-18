@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Testimony: Pics or It Didn't Happen",
+  "version": "2.0.0",
+  "minimum_chrome_version": "102",
+  "description": "Record UAT steps with screenshots, annotate them, add notes and download a PDF as proof of testing.",
+  "permissions": ["storage", "unlimitedStorage", "scripting", "activeTab"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": {
+    "default_title": "Testimony",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  },
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "commands": {
+    "capture-now": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Capture a screenshot of the current tab as a step"
+    },
+    "toggle-recording": {
+      "suggested_key": { "default": "Alt+Shift+R" },
+      "description": "Start or stop recording"
+    }
+  }
+}

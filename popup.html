@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Testimony</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>Testimony</h1>
+  <p class="tagline">Pics or It Didn't Happen</p>
+  <div class="row">
+    <label>Ticket<input id="ticket" placeholder="PROJ-123" autocomplete="off"></label>
+    <label>Environment<input id="env" placeholder="UAT / build" autocomplete="off"></label>
+  </div>
+
+  <section class="site" aria-live="polite">
+    <div class="site-line"><span id="dot" class="dot"></span><span id="siteText">Checking site…</span></div>
+    <div id="allowBox" hidden>
+      <input id="pattern" spellcheck="false" autocomplete="off" aria-label="Site to allow">
+      <p class="hint">Testimony only reads clicks on sites you allow. Widen it if the app spans subdomains, e.g. <code>*.example.com</code>.</p>
+      <button id="allow" class="secondary">Allow this site</button>
+    </div>
+    <p id="notice" class="msg" hidden></p>
+    <p id="msg" class="msg" role="alert" hidden></p>
+  </section>
+
+  <button id="toggle" class="primary">Start recording</button>
+  <p id="hint" class="hint">Captures each click, typed field and dropdown choice on allowed sites.</p>
+
+  <button id="shot" class="secondary">Capture screenshot now <kbd>Alt+Shift+S</kbd></button>
+
+  <details id="opts">
+    <summary>Options</summary>
+    <label class="opt">Capture after a click
+      <select id="delay">
+        <option value="0">Instantly</option>
+        <option value="700">After 0.7 s (default)</option>
+        <option value="1500">After 1.5 s</option>
+        <option value="3000">After 3 s</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="finalShot"> Add a final screenshot when I stop</label>
+    <p class="hint">A short delay lets toasts and new rows appear before the screenshot. Typing is always captured at once.</p>
+  </details>
+
+  <details id="sites">
+    <summary>Allowed sites (<span id="siteCount">0</span>)</summary>
+    <ul id="siteList"></ul>
+    <p id="noSites" class="hint">None yet. Sites are only added when you allow them here.</p>
+  </details>
+
+  <div class="foot">
+    <span id="count">0 steps</span>
+    <button id="edit" class="link">Open editor &amp; export PDF</button>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

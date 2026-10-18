@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>popup harness</title>
+<script>
+// Loads the real popup.html/popup.js against a mocked chrome API. Test-only.
+const mock = window.__mock = {
+  tabUrl: new URLSearchParams(location.search).get('tab') || 'https://uat.example.com/login?x=1',
+  granted: [], grantResult: true, storage: {}, session: {}, log: [],
+};
+const ev = () => { const f = []; return { addListener: (x) => f.push(x), fire: () => f.forEach((x) => x()) }; };
+const onAdded = ev(), onRemoved = ev();
+window.close = () => mock.log.push('window.close');
+window.chrome = {
+  tabs: { query: async () => [{ id: 1, url: mock.tabUrl }] },
+  storage: { session: { get: async (k) => (k in mock.session ? { [k]: mock.session[k] } : {}) }, local: {
+    get: async (k) => Object.fromEntries((Array.isArray(k) ? k : [k]).filter((x) => x in mock.storage).map((x) => [x, mock.storage[x]])),
+    set: async (o) => { mock.log.push('storage.set ' + JSON.stringify(Object.keys(o))); Object.assign(mock.storage, o); },
+    remove: async (k) => { mock.log.push('storage.remove ' + k); delete mock.storage[k]; },
+  } },
+  permissions: {
+    getAll: async () => ({ origins: mock.granted }),
+    contains: async ({ origins }) => origins.every((o) => mock.granted.includes(o)),
+    request: async ({ origins }) => {
+      mock.log.push('permissions.request ' + origins.join(','));
+      if (mock.grantResult) { mock.granted.push(...origins); onAdded.fire(); }
+      return mock.grantResult;
+    },
+    remove: async ({ origins }) => { mock.log.push('permissions.remove ' + origins); mock.granted = mock.granted.filter((o) => !origins.includes(o)); onRemoved.fire(); return true; },
+    onAdded, onRemoved,
+  },
+  runtime: { sendMessage: async (m) => { mock.log.push('sendMessage ' + m.type); if (m.type === 'start') mock.storage.recording = true; if (m.type === 'stop') mock.storage.recording = false; return { ok: true }; } },
+};
+fetch('/popup.html').then((r) => r.text()).then((html) => {
+  document.open();
+  document.write(html.replace('<head>', '<head><base href="/">'));
+  document.close();
+});
+</script>

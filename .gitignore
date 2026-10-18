@@ -1,0 +1,15 @@
+# build output and local artifacts
+dist/
+test/out.pdf
+*.pdf
+.DS_Store
+node_modules/
+
+# never commit secrets or key material
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.crx
+*.log
