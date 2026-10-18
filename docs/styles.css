@@ -84,6 +84,12 @@ footer.site .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; justify-cont
 footer.site a { color: var(--muted); }
 footer.site .links { display: flex; gap: 22px; flex-wrap: wrap; }
 
+/* support */
+.support { text-align: center; }
+.support .sub { margin-left: auto; margin-right: auto; }
+.btn.coffee { background: #ffdd00; border-color: #ffdd00; color: #14213d; }
+.btn.coffee:hover { background: #ffe94d; border-color: #ffe94d; }
+
 /* policy page */
 .doc { max-width: 760px; margin: 0 auto; padding: 56px 24px 80px; }
 .doc h1 { font-size: clamp(32px, 4.4vw, 44px); }

@@ -52,6 +52,9 @@ The website is a static page hosted on GitHub Pages. It has no cookies, analytic
 As with any web host, GitHub may keep standard server logs of visits under its own privacy statement. The
 developer does not receive that information.
 
+The site links to other websites, such as Buy Me a Coffee for optional tips. Those sites have their own privacy
+policies. Testimony itself has no payments and does not link to them from inside the extension.
+
 ## Children
 Testimony is a professional tool and is not directed at children. It does not knowingly collect information from
 anyone.
