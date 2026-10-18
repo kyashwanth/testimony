@@ -205,7 +205,9 @@ Notes:
 - This repo has **release immutability** on: once a release is published, its tag and files cannot be changed. The
   workflow therefore creates a draft, attaches the files and only then publishes. If a run fails part-way, delete the
   draft release and the tag on GitHub, fix the problem, and tag again.
-- The actions used are GitHub's own (`checkout`, `setup-node`, `upload-artifact`) at major-version tags.
+- The actions used are GitHub's own (`checkout`, `setup-node`, `upload-artifact`) at major-version tags, on versions
+  that run on Node 24. GitHub is retiring Node 20 for actions, so when a similar warning appears in a run, look up
+  each action's `runs.using` in its `action.yml` and move to a newer major.
 - The guard step in `ci.yml` looks for key files and credential patterns. It is a safety net, not a replacement
   for reviewing what you commit.
 
