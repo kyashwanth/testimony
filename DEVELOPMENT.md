@@ -32,6 +32,7 @@ the console of the page being tested.
 | `test/` | Node tests and browser harnesses |
 | `store-assets/` | Chrome Web Store graphics and the pages that generate them |
 | `docs/` | The website served by GitHub Pages: landing page and privacy policy |
+| `.github/workflows/` | CI (tests and package build) and the tag-triggered release |
 | `build.sh` | Runs all tests and writes the store zip |
 | `STORE-LISTING.md` | Copy and justifications for the Chrome Web Store form |
 | `PRIVACY.md` | Privacy policy (also the text to host for the store listing) |
@@ -147,14 +148,37 @@ page), `privacy.html` (privacy policy), `styles.css`, `assets/` (copies of the s
   badge with a link to the listing, and update the install line in `README.md`.
 - **Canonical and social URLs** in the page `<head>` assume the address above. Change them if you add a custom domain.
 
+## Automation (GitHub Actions)
+
+Two workflows in `.github/workflows/` build and publish everything on GitHub, so the package that reaches the
+store is always built from a known commit after the tests pass.
+
+| Workflow | Runs when | What it does |
+|---|---|---|
+| `ci.yml` | every push to `main` and every pull request | Checks nothing sensitive is tracked, runs `./build.sh` (all tests, then the zip), checks the zip contains only runtime files, and attaches it to the run as the `testimony-extension` artifact (30 days) |
+| `release.yml` | a tag like `v2.0.1` is pushed | Checks the tag matches `manifest.json` and the commit is on `main`, runs `./build.sh`, writes a SHA-256 checksum, and publishes a GitHub Release with the zip and checksum attached |
+
+Notes:
+- Neither workflow uses secrets. CI has read-only access; only the release job can write, and only to releases.
+- This repo has **release immutability** on: once a release is published, its tag and files cannot be changed. The
+  workflow therefore creates a draft, attaches the files and only then publishes. If a run fails part-way, delete the
+  draft release and the tag on GitHub, fix the problem, and tag again.
+- The actions used are GitHub's own (`checkout`, `setup-node`, `upload-artifact`) at major-version tags.
+- The guard step in `ci.yml` looks for key files and credential patterns. It is a safety net, not a replacement
+  for reviewing what you commit.
+
 ## Releasing
 
-1. Bump `version` in `manifest.json`. The store rejects a package whose version is not higher.
-2. Run `./build.sh` and confirm every suite passes.
+1. Bump `version` in `manifest.json` (the store rejects a version that is not higher), commit and push to `main`.
+2. Wait for the **CI** run on that commit to pass.
 3. Do the manual check below in a real Chrome profile.
-4. Upload `dist/testimony-<version>.zip` in the Chrome Web Store Developer Dashboard.
-5. Update the listing text from [`STORE-LISTING.md`](STORE-LISTING.md) if features or permissions changed, and
+4. Tag and push: `git tag v<version> && git push origin v<version>`. The **Release** workflow publishes
+   `testimony-<version>.zip` at https://github.com/kyashwanth/testimony/releases.
+5. Download that zip from the release and upload **that exact file** in the Chrome Web Store Developer Dashboard.
+6. Update the listing text from [`STORE-LISTING.md`](STORE-LISTING.md) if features or permissions changed, and
    make sure the privacy declarations still match the code.
+
+You can still build locally with `./build.sh`, for quick testing.
 
 ### Manual check before every release
 The automated tests use fakes, so these need a real browser:

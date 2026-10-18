@@ -2,6 +2,8 @@
 
 *Pics or It Didn't Happen.*
 
+[![CI](https://github.com/kyashwanth/testimony/actions/workflows/ci.yml/badge.svg)](https://github.com/kyashwanth/testimony/actions/workflows/ci.yml)
+
 **Website:** https://kyashwanth.github.io/testimony/  ·  [Privacy policy](https://kyashwanth.github.io/testimony/privacy.html)
 
 Testimony is a Chrome extension that turns a manual test session into proof you can attach to a ticket.
@@ -9,7 +11,8 @@ Click through your test as normal and it captures each step with a screenshot. T
 step Pass or Fail, annotate the screenshots, and download everything as a single PDF.
 
 **Install:** from the Chrome Web Store (the link will be added here once the listing is live).
-Requires Chrome 102 or later.
+Early testers can download the latest zip from [Releases](https://github.com/kyashwanth/testimony/releases); the
+release notes explain how to load it. Requires Chrome 102 or later.
 
 ## Quick start
 

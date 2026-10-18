@@ -1,0 +1,56 @@
+name: CI
+
+# Runs the tests and builds the extension package on every push to main and on every pull request.
+# The built zip is attached to the run as a downloadable artifact.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Guard against key material and credentials in the repo
+        run: |
+          if git ls-files | grep -Ei '(^|/)(\.env[^/]*|[^/]*\.(pem|key|p12|crx))$'; then
+            echo "::error::A key or environment file is tracked"; exit 1
+          fi
+          if git grep -nIE 'BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}' -- . ':!.github'; then
+            echo "::error::Possible credential found"; exit 1
+          fi
+
+      - name: Run the tests and build the package
+        run: ./build.sh
+
+      - name: Check the package contents
+        run: |
+          zip=$(ls dist/testimony-*.zip)
+          unzip -Z1 "$zip" > /tmp/files.txt
+          grep -qx 'manifest.json' /tmp/files.txt || { echo "::error::manifest.json is not at the zip root"; exit 1; }
+          if grep -E '^(test|docs|store-assets|\.github|dist)/|\.(md|sh)$|package\.json' /tmp/files.txt; then
+            echo "::error::Development files leaked into the package"; exit 1
+          fi
+          echo "Package contains $(wc -l < /tmp/files.txt) entries"
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: testimony-extension
+          path: dist/testimony-*.zip
+          if-no-files-found: error
+          retention-days: 30
