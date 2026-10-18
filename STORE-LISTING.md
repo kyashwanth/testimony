@@ -52,7 +52,7 @@ Nothing leaves the device, but declare conservatively, because the extension doe
 - Certify: not sold to third parties; not used for purposes unrelated to the single purpose; not used for creditworthiness or lending.
 
 ## Website, privacy policy and support URLs
-Once GitHub Pages is enabled (see DEVELOPMENT.md > Website), use:
+The site is live on GitHub Pages (see DEVELOPMENT.md > Website). Use:
 - **Homepage URL:** https://kyashwanth.github.io/testimony/
 - **Privacy policy URL:** https://kyashwanth.github.io/testimony/privacy.html
 - **Support URL:** https://github.com/kyashwanth/testimony/issues

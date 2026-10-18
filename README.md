@@ -2,6 +2,8 @@
 
 *Pics or It Didn't Happen.*
 
+**Website:** https://kyashwanth.github.io/testimony/  ·  [Privacy policy](https://kyashwanth.github.io/testimony/privacy.html)
+
 Testimony is a Chrome extension that turns a manual test session into proof you can attach to a ticket.
 Click through your test as normal and it captures each step with a screenshot. Then add notes, mark each
 step Pass or Fail, annotate the screenshots, and download everything as a single PDF.
