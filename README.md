@@ -135,3 +135,7 @@ If Testimony saves you time and you would like to say thanks, you can
 [buy me a coffee](https://buymeacoffee.com/kyashwanth). It is entirely optional.
 
 Want to build or contribute? See [DEVELOPMENT.md](DEVELOPMENT.md).
+
+## License
+
+Testimony is released under the [MIT License](LICENSE).
