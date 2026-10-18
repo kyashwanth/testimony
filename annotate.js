@@ -119,3 +119,10 @@ export function renderStep(canvas, bitmap, list, k = 1, crop = null) {
   for (const a of list) drawAnnotation(ctx, a);
   ctx.restore();
 }
+
+// Everything a rendered screenshot depends on. Two exports reuse a cached picture only if this key is identical, so
+// editing an annotation, the zoom, the mode (crop on or off), the width or the JPEG quality always makes a new one.
+// Text fields (title, note, expected...) are not part of the picture and are deliberately left out.
+export function renderKey(step, guide, maxWidth, quality) {
+  return [step.id, step.ts, guide ? 'g' : 't', maxWidth, quality, step.zoom ? 1 : 0, JSON.stringify(step.annotations || [])].join('|');
+}

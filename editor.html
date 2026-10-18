@@ -19,7 +19,10 @@
     <input id="fileInput" type="file" accept="image/*" multiple hidden>
     <button id="btnHistory" class="ghost">History</button>
     <button id="btnNew" class="ghost">New session</button>
-    <button id="btnPdf" class="primary">Download PDF</button>
+    <div class="download" role="group" aria-label="Download">
+      <select id="format" aria-label="File format"></select>
+      <button id="btnDownload" class="primary" type="button">Download PDF</button>
+    </div>
   </header>
 
   <main>

@@ -11,12 +11,16 @@ node test/fastclicks.test.mjs >/dev/null 2>&1 && echo "fast click tests passed"
 node test/navclicks.test.mjs >/dev/null 2>&1 && echo "link click tests passed"
 node test/recorder.test.mjs >/dev/null 2>&1 && echo "recorder tests passed"
 node test/modes.test.mjs >/dev/null && echo "mode tests passed"
+node test/html.test.mjs >/dev/null && echo "html export tests passed"
+node test/zip.test.mjs >/dev/null && echo "zip tests passed"
+node test/markdown.test.mjs >/dev/null && echo "markdown export tests passed"
+node test/csv.test.mjs >/dev/null && echo "csv export tests passed"
 node test/pdf.test.mjs >/dev/null && rm -f test/out.pdf && echo "pdf test passed"
 V=$(node -p "require('./manifest.json').version")
 mkdir -p dist
 OUT="dist/testimony-$V.zip"
 rm -f "$OUT"
-zip -X -r "$OUT" manifest.json background.js content.js db.js annotate.js pdf.js sites.js modes.js placeholder.js \
+zip -X -r "$OUT" manifest.json background.js content.js db.js annotate.js pdf.js html.js zip.js markdown.js csv.js sites.js modes.js placeholder.js \
   popup.html popup.css popup.js editor.html editor.css editor.js icons -x '*.DS_Store' >/dev/null
 echo "built $OUT"
 unzip -l "$OUT"

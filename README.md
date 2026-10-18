@@ -26,7 +26,7 @@ release notes explain how to load it. Requires Chrome 102 or later.
 3. Press **Allow site & start recording**. Chrome asks you to allow Testimony on that one site. Approve it.
 4. Work as you normally would. Every click, typed field and dropdown choice becomes a step with a screenshot.
 5. Press the icon again and choose **Stop & review**. The editor opens with all your steps.
-6. Edit, annotate, then press **Download PDF**.
+6. Edit and annotate, choose a **format** next to the Download button, and press **Download**.
 
 Attach a test PDF to your ticket, or publish a guide wherever your team keeps its how-tos.
 
@@ -78,6 +78,24 @@ In the editor you can:
   Use **Redact** to black out anything sensitive before you export.
 - Move steps up or down, or delete them.
 - Add extra screenshots by pasting, dropping or uploading images.
+
+### Formats
+
+Pick the format next to the **Download** button. Your choice is remembered.
+
+| Format | What you get | Good for |
+|---|---|---|
+| **PDF** | A paginated document | Attaching to a ticket, sending as sign-off, printing |
+| **HTML** | One self-contained web page with the screenshots inside, a contents list for guides, and print styles | Emailing, a wiki or intranet, any language or emoji |
+| **Markdown + images** | A `.zip` holding a folder with the Markdown file and an `images/` folder | Confluence, GitHub, Notion, a docs site or any editor |
+| **CSV** | One row per step: ticket or guide details, step, result, expected, actual, notes, page, time and screenshot file name | Spreadsheets and test-management imports |
+
+- **HTML** has no scripts and never contacts a server.
+- **Markdown**: unzip it and keep the `images/` folder beside the `.md` file so the pictures show. Anything you typed
+  is escaped, so it shows exactly as written and cannot add links or HTML in the tool you paste it into.
+- **CSV** opens in Excel with accents and other scripts intact. A cell that begins with `=`, `+`, `-` or `@` gets an
+  apostrophe in front so a spreadsheet shows it as text and never runs it as a formula. The `Screenshot` column holds the
+  file names used in the Markdown package.
 
 A test PDF contains the ticket, environment, tester, date, overall result and summary, followed by every step
 with its screenshot, expected and actual results, note, page address and Pass or Fail status. A guide PDF has the
@@ -141,8 +159,12 @@ popup, for example to 1.5 or 3 seconds.
 because a page was closing or the browser was busy. The step is kept so your sequence is complete. Capture the
 screen again with `Alt+Shift+S` and replace the picture by pasting it into the editor.
 
+**A step says "Page changed after this click".** The page navigated before the screenshot could be taken, so the picture
+shows the next page and a click marker would point at the wrong thing. Links are normally photographed as you click
+to avoid this; it mostly happens with buttons that move you to another page. The next step shows where you landed.
+
 **Some characters in the PDF show as `?`.** The PDF supports Latin characters. Other scripts and emoji in
-titles or notes are replaced with `?`.
+titles or notes are replaced with `?`. Choose the **HTML** format if you need them.
 
 **I can't record `chrome://` pages or the Chrome Web Store.** Chrome does not allow extensions to capture them.
 
@@ -159,10 +181,6 @@ or remove the extension to erase everything.
 ## Feedback and support
 
 Found a problem or have an idea? Please open an issue at
-**A step says "Page changed after this click".** The page navigated before the screenshot could be taken, so the picture
-shows the next page and a click marker would point at the wrong thing. Links are normally photographed as you click
-to avoid this; it mostly happens with buttons that move you to another page. The next step shows where you landed.
-
 [github.com/kyashwanth/testimony/issues](https://github.com/kyashwanth/testimony/issues).
 
 If Testimony saves you time and you would like to say thanks, you can

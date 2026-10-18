@@ -1,6 +1,10 @@
 import * as db from './db.js';
-import { COLORS, baseLW, baseFont, drawAnnotation, drawAnnotations, renderStep, cropFor } from './annotate.js';
+import { COLORS, baseLW, baseFont, drawAnnotation, drawAnnotations, renderStep, cropFor, renderKey } from './annotate.js';
 import { buildPdf } from './pdf.js';
+import { buildHtml } from './html.js';
+import { buildMarkdown } from './markdown.js';
+import { buildCsv } from './csv.js';
+import { buildZip } from './zip.js';
 import { modeOf, MODES, isTextStep, stepNumbers, resultFrom, fileNameFor, sessionLabel } from './modes.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -184,7 +188,7 @@ function render() {
   const nums = stepNumbers(steps);
   $('#steps').replaceChildren(...steps.map((s, i) => stepCard(s, i, nums)));
   $('#empty').hidden = steps.length > 0;
-  $('#btnPdf').disabled = false;
+  $('#btnDownload').disabled = false;
 }
 
 // Adds a section heading or a paragraph (guides): steps with no screenshot.
@@ -378,58 +382,140 @@ document.addEventListener('keydown', (e) => {
 
 // ---- PDF export --------------------------------------------------------------------
 
-// Turns steps into PDF bytes. `cache` reuses decoded bitmaps for the live session; archived steps decode on demand.
-async function renderPdf(list, metaObj, { cache = false, onProgress = () => {} } = {}) {
+// Rendered screenshots (annotations drawn in, zoom crop applied, JPEG encoded) are kept for the live session, so
+// exporting the same session in a second or third format does not redo all the canvas and JPEG work. The key holds
+// everything the picture depends on, so editing an annotation or the zoom produces a new entry.
+const preparedImages = new Map();
+const MAX_PREPARED = 300;
+const MAX_PREPARED_BYTES = 64 * 1024 * 1024;   // bounded by memory as well as by count
+let preparedBytes = 0;
+
+function rememberImage(key, img) {
+  preparedImages.set(key, img);
+  preparedBytes += img.jpeg.length;
+  while (preparedImages.size > MAX_PREPARED || preparedBytes > MAX_PREPARED_BYTES) {
+    const [oldKey, old] = preparedImages.entries().next().value;   // the oldest entry
+    preparedImages.delete(oldKey);
+    preparedBytes -= old.jpeg.length;
+  }
+}
+
+// Turns the steps into plain data for an exporter: each screenshot is drawn with its annotations (and, in a guide,
+// the zoom crop) and encoded as JPEG. `cache` reuses decoded bitmaps and rendered images for the live session; archived
+// steps decode on demand. Every exporter starts from this, so they always agree.
+async function prepareSteps(list, metaObj, { cache = false, maxWidth = 1600, quality = 0.85, onProgress = () => {} } = {}) {
   const guide = modeOf(metaObj) === 'guide';
   const prepared = [];
   for (let i = 0; i < list.length; i++) {
     onProgress(i + 1, list.length);
     const s = list[i];
     if (isTextStep(s)) { prepared.push({ kind: s.kind, title: s.title, note: s.note }); continue; }
-    const bmp = cache ? await bitmapFor(s) : await createImageBitmap(s.image);
-    const crop = guide ? cropFor(s, bmp.width, bmp.height) : null;
-    const canvas = document.createElement('canvas');
-    renderStep(canvas, bmp, s.annotations || [], Math.min(1, 1600 / (crop ? crop.w : bmp.width)), crop);
-    if (!cache) bmp.close();
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-    prepared.push({
+    const fields = {
       kind: s.kind, title: s.title, note: s.note, status: s.status, url: s.url, tab: s.tab,
       expected: s.expected, actual: s.actual, callout: s.callout,
-      jpeg: new Uint8Array(await blob.arrayBuffer()), w: canvas.width, h: canvas.height,
-    });
+    };
+    const key = cache ? renderKey(s, guide, maxWidth, quality) : null;
+    let img = key && preparedImages.get(key);
+    if (!img) {
+      const bmp = cache ? await bitmapFor(s) : await createImageBitmap(s.image);
+      const crop = guide ? cropFor(s, bmp.width, bmp.height) : null;
+      const canvas = document.createElement('canvas');
+      renderStep(canvas, bmp, s.annotations || [], Math.min(1, maxWidth / (crop ? crop.w : bmp.width)), crop);
+      if (!cache) bmp.close();
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+      img = { jpeg: new Uint8Array(await blob.arrayBuffer()), w: canvas.width, h: canvas.height };
+      if (key) rememberImage(key, img);
+    }
+    prepared.push({ ...fields, ...img });
   }
   const date = metaObj.date || today();
-  const bytes = buildPdf({ meta: { ...metaObj, date, result: metaObj.result || resultFrom(list) }, steps: prepared });
-  return { bytes, name: fileNameFor(metaObj, date) };
+  return { steps: prepared, meta: { ...metaObj, date, result: metaObj.result || resultFrom(list) }, date };
 }
 
-function saveBlob(bytes, name) {
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+async function renderPdf(list, metaObj, opts) {
+  const p = await prepareSteps(list, metaObj, opts);
+  return { data: buildPdf({ meta: p.meta, steps: p.steps }), name: fileNameFor(metaObj, p.date), type: 'application/pdf' };
+}
+
+// HTML screenshots are a little smaller than the PDF's, because they are embedded in the page itself.
+async function renderHtml(list, metaObj, opts) {
+  const p = await prepareSteps(list, metaObj, { maxWidth: 1400, quality: 0.82, ...opts });
+  return { data: buildHtml({ meta: p.meta, steps: p.steps }), name: fileNameFor(metaObj, p.date, 'html'), type: 'text/html;charset=utf-8' };
+}
+
+// Markdown plus its screenshots, packed in a folder inside a ZIP so unzipping never spills files into the current directory.
+async function renderMarkdown(list, metaObj, opts) {
+  const p = await prepareSteps(list, metaObj, opts);
+  const { markdown, images } = buildMarkdown({ meta: p.meta, steps: p.steps });
+  const stem = fileNameFor(metaObj, p.date, 'md').replace(/\.md$/, '');
+  const data = buildZip([
+    { name: `${stem}/${stem}.md`, data: markdown },
+    ...images.map((img) => ({ name: `${stem}/${img.name}`, data: img.data })),
+  ]);
+  return { data, name: `${stem}.zip`, type: 'application/zip' };
+}
+
+// The CSV needs no screenshots, so it skips the (slow) image rendering.
+async function renderCsv(list, metaObj) {
+  const date = metaObj.date || today();
+  const meta = { ...metaObj, date, result: metaObj.result || resultFrom(list) };
+  return { data: buildCsv({ meta, steps: list }), name: fileNameFor(metaObj, date, 'csv'), type: 'text/csv;charset=utf-8' };
+}
+
+// The one list of export formats. It drives the picker, the Download button label and the History dropdown.
+const FORMATS = {
+  pdf: { label: 'PDF', option: 'PDF', render: renderPdf },
+  html: { label: 'HTML', option: 'HTML (one web page)', render: renderHtml },
+  md: { label: 'Markdown', option: 'Markdown + images (.zip)', render: renderMarkdown },
+  csv: { label: 'CSV', option: 'CSV (spreadsheet)', render: renderCsv },
+};
+
+function fillFormatOptions(select, placeholder) {
+  if (placeholder) select.append(h('option', { value: '', text: placeholder }));
+  for (const [value, f] of Object.entries(FORMATS)) select.append(h('option', { value, text: f.option }));
+}
+
+function saveBlob({ data, name, type }) {
+  const url = URL.createObjectURL(new Blob([data], { type }));
   const a = h('a', { href: url, download: name });
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
-  window.__lastPdf = bytes; // handy for tests
+  window.__lastExport = { name, type, data }; // handy for tests
+  if (type === 'application/pdf') window.__lastPdf = data;
 }
 
-async function exportPdf() {
-  const btn = $('#btnPdf');
-  btn.disabled = true;
+// Exports the session being edited, in the format chosen next to the Download button. The button shows progress.
+async function exportCurrent(kind, btn) {
   const label = btn.textContent;
+  btn.disabled = true;
   try {
     await flushSaves();
     await db.setMeta(meta);
-    const { bytes, name } = await renderPdf(steps, meta, {
+    saveBlob(await FORMATS[kind].render(steps, meta, {
       cache: true, onProgress: (i, n) => { btn.textContent = `Building… ${i}/${n}`; },
-    });
-    saveBlob(bytes, name);
+    }));
   } finally {
     btn.textContent = label;
     btn.disabled = false;
   }
 }
-$('#btnPdf').addEventListener('click', exportPdf);
+
+// The chosen format is remembered between visits.
+function savedFormat() {
+  try { const v = localStorage.getItem('testimony.format'); if (FORMATS[v]) return v; } catch { /* storage unavailable */ }
+  return 'pdf';
+}
+function syncDownloadLabel() { $('#btnDownload').textContent = `Download ${FORMATS[$('#format').value].label}`; }
+fillFormatOptions($('#format'));
+$('#format').value = savedFormat();
+syncDownloadLabel();
+$('#format').addEventListener('change', () => {
+  try { localStorage.setItem('testimony.format', $('#format').value); } catch { /* storage unavailable */ }
+  syncDownloadLabel();
+});
+$('#btnDownload').addEventListener('click', () => exportCurrent($('#format').value, $('#btnDownload')));
 
 // ---- Toast, new session, history -----------------------------------------------------------
 
@@ -449,6 +535,8 @@ async function refreshHistoryCount() {
 
 async function reloadAll() {
   bitmaps.clear();
+  preparedImages.clear();
+  preparedBytes = 0;
   meta = await db.getMeta();
   fillMeta();
   applyMode();
@@ -471,7 +559,7 @@ async function openHistory() {
         h('b', { text: sessionLabel(s.meta) }),
         h('span', { text: `${MODES[kind]} · ${when} · ${s.count} step${s.count === 1 ? '' : 's'}${result}` })),
       h('button', { text: 'Restore', onclick: () => restoreFromHistory(s.id) }),
-      h('button', { text: 'PDF', onclick: (e) => pdfFromHistory(s.id, e.target) }),
+      exportSelect(s.id),
       h('button', { class: 'del', text: 'Delete', onclick: async () => {
         if (!confirm('Delete this saved session? This can not be undone.')) return;
         await db.deleteSession(s.id);
@@ -491,17 +579,23 @@ async function restoreFromHistory(id) {
   toast('Session restored');
 }
 
-async function pdfFromHistory(id, btn) {
-  const original = btn.textContent;
+// A compact "Export…" dropdown for a History row.
+function exportSelect(id) {
+  const sel = h('select', { 'aria-label': 'Export this session', onchange: async (e) => {
+    const kind = e.target.value;
+    e.target.value = '';
+    if (kind) await exportFromHistory(id, kind, e.target);
+  } });
+  fillFormatOptions(sel, 'Export…');
+  return sel;
+}
+
+async function exportFromHistory(id, kind, btn) {
   btn.disabled = true;
   try {
     const session = await db.getSession(id);
-    const { bytes, name } = await renderPdf(session.steps, session.meta || {}, {
-      onProgress: (i, n) => { btn.textContent = `${i}/${n}`; },
-    });
-    saveBlob(bytes, name);
+    saveBlob(await FORMATS[kind].render(session.steps, session.meta || {}));
   } finally {
-    btn.textContent = original;
     btn.disabled = false;
   }
 }

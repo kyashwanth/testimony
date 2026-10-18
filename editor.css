@@ -107,3 +107,9 @@ body.mode-guide [data-only="test"], body.mode-test [data-only="guide"] { display
 @media (max-width: 820px) { .cols, .callout { grid-template-columns: 1fr; } }
 
 [hidden] { display: none !important; }
+
+/* download: format picker + one button */
+.download { display: inline-flex; }
+.download select { width: auto; margin: 0; padding: 7px 28px 7px 12px; border-radius: 8px 0 0 8px; border-right: 0; font-weight: 500; }
+.download button { border-radius: 0 8px 8px 0; white-space: nowrap; }
+.hlist select { padding: 4px 8px; font-size: 12px; width: auto; margin: 0; }

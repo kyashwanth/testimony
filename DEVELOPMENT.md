@@ -29,6 +29,10 @@ the console of the page being tested.
 | `editor.html/js/css` | Full-page editor: notes, Pass/Fail, annotation, History, PDF export |
 | `annotate.js` | Canvas drawing shared by the editor preview, annotator and PDF, and the zoom crop |
 | `pdf.js` | Dependency-free PDF writer: the evidence report and the guide layouts |
+| `html.js` | Builds the self-contained HTML export of a session (guide or evidence report) |
+| `markdown.js` | Builds the Markdown export and lists the screenshots it refers to (`images/step-01.jpg`...) |
+| `csv.js` | Builds the CSV export (one row per step) |
+| `zip.js` | Dependency-free ZIP writer (stored, UTF-8 names, path-checked) used to package Markdown plus images |
 | `db.js` | IndexedDB storage: current session, metadata, session history |
 | `sites.js` | Pure helpers for validating and describing site match patterns |
 | `test/` | Node tests and browser harnesses |
@@ -49,12 +53,16 @@ node test/tabs.test.mjs         # tab scope, tab numbering, "!" badge detection
 node test/capture.test.mjs      # capture delay, event kinds, duplicates, final screenshot
 node test/history.test.mjs      # session archive, restore, 5-session limit
 node test/fastclicks.test.mjs   # bursts of fast actions: nothing lost, in order, within Chrome's screenshot quota
+node test/recorder.test.mjs     # the real content.js in a sandbox: link detection, early screenshots, double-clicks
+node test/navclicks.test.mjs    # link clicks on the service-worker side: early screenshots, page-changed label
 node test/modes.test.mjs        # mode helpers, zoom crop, guide and evidence PDFs
+node test/html.test.mjs         # HTML export: escaping, self-contained, byte-identical images, both modes
+node test/zip.test.mjs          # ZIP writer, checked against the real unzip and Python's zipfile
+node test/markdown.test.mjs     # Markdown export: hostile text stays inert, structure, image package
+node test/csv.test.mjs          # CSV export: RFC 4180 quoting, formula injection, columns, both modes
 node test/pdf.test.mjs          # PDF structure and tab labels
 ```
 
-node test/recorder.test.mjs     # the real content.js in a sandbox: link detection, early screenshots, double-clicks
-node test/navclicks.test.mjs    # link clicks on the service-worker side: early screenshots, page-changed label
 The service worker tests run `background.js` against fakes of `chrome.*` and IndexedDB in
 `test/fakes.mjs`. They wait on conditions instead of fixed delays, because several features are timing-based.
 If you add one, avoid fixed `sleep`s that race the capture queue.
@@ -113,14 +121,6 @@ order, and respect Chrome's screenshot quota.
 - **Double-click vs quick repeats.** Only a true double-click (`detail > 1`, same spot, within 300 ms) collapses
   into one step. Two deliberate clicks on the same control are two steps. The service worker does no
   title-based de-duplication.
-- **Delivery.** Messages carry an id and are retried twice, so a lost message is re-sent and a re-sent one is
-  recorded once.
-- **Pacing (`background.js`).** Clicks and Enter wait `captureDelayMs` (default 700 ms) so the page can react,
-  but a step is photographed *before the user's next action* (100 ms ahead of it) when one has already arrived,
-  so a fast sequence does not get the later steps' results. Typing and dropdown changes are captured at once.
-- **Quota.** `captureVisibleTab` allows 2 calls per second. The worker allows a burst of 2 per 1.1 s window and
-  waits for the next slot, so a burst is served as fast as Chrome permits without errors.
-- **Failures.** A failed screenshot is retried (3 attempts). If it still fails, the step is saved with the grey
 - **Links change the page.** A screenshot taken after the usual delay would show the *next* page, with no way to place
   the click marker. The recorder therefore treats a click on a link with a real destination (not `#...`, `javascript:`,
   `mailto:`, a download, or a menu toggle) specially: at the mouse *press* it asks the worker for an early
@@ -129,6 +129,14 @@ order, and respect Chrome's screenshot quota.
   at the press rather than the click gives it the 80 to 150 ms the button is held down as a head start on pages that
   navigate instantly. If a page still changes during a normal delayed capture, the step carries a "Page changed after
   this click" label instead of a misleading marker or silence.
+- **Delivery.** Messages carry an id and are retried twice, so a lost message is re-sent and a re-sent one is
+  recorded once.
+- **Pacing (`background.js`).** Clicks and Enter wait `captureDelayMs` (default 700 ms) so the page can react,
+  but a step is photographed *before the user's next action* (100 ms ahead of it) when one has already arrived,
+  so a fast sequence does not get the later steps' results. Typing and dropdown changes are captured at once.
+- **Quota.** `captureVisibleTab` allows 2 calls per second. The worker allows a burst of 2 per 1.1 s window and
+  waits for the next slot, so a burst is served as fast as Chrome permits without errors.
+- **Failures.** A failed screenshot is retried (3 attempts). If it still fails, the step is saved with the grey
   `placeholder.js` image, `captureFailed: true`, and a note drawn on it, rather than being lost.
 - A Stop right after a click cannot overtake it (events are queued synchronously), and a delayed capture drops its
   click marker if the tab navigated in the meantime.
@@ -172,6 +180,33 @@ additive, and test the old shape with `test/legacy-db.html`.
 built-in Helvetica fonts in WinAnsi encoding, which is why non-Latin characters become `?`. The editor renders each
 step to a canvas first (with annotations, and the zoom crop for guides) and hands `pdf.js` plain data, so the writer
 itself has no DOM dependency and is unit tested in Node.
+
+### HTML export
+`html.js` turns the same prepared data as the PDF into one HTML file (`editor.js` `prepareSteps` renders the
+screenshots once for both). Rules it keeps, all covered by `test/html.test.mjs`:
+- **Everything typed is escaped**, in every field including meta, URLs and image `alt` text. Tests feed hostile
+  strings through each field and check that every `<img>` is exactly the shape the builder emits.
+- **Self-contained and inert:** screenshots are `data:` URIs, styles are inline, there is no script, link, iframe or
+  external URL, and a `Content-Security-Policy` meta tag (`default-src 'none'; img-src data:`) backs that up.
+- **Images are byte-identical** to what was rendered, so a recipient can extract them.
+- It has print, dark and small-screen styles, and a contents list for guides with two or more headings.
+
+### Markdown, CSV and ZIP exports
+Every export starts from the editor's `prepareSteps` (images) or the raw steps (CSV needs none). The editor's
+`FORMATS` table (`pdf`, `html`, `md`, `csv`) is the one list of formats: it fills the picker beside the Download button,
+labels the button, and fills the Export dropdown on each History row. Rendered screenshots are cached for the live
+session (keyed by step, annotations, zoom, width and quality), so exporting a second format is quick; editing
+anything a picture depends on makes a new entry. Rules each builder keeps, covered by its tests:
+- **Markdown** escapes everything a person typed (`\ ` * _ [ ] |` backslash-escaped, `& < >` as entities), plus characters
+  that only matter at the start of a line (`#`, `1.`, `-`, `---`), so user text cannot become a heading, link, image or
+  HTML in whatever renders it. URLs go in code spans with `<` and `>` percent-encoded. Line breaks are kept.
+- **CSV** follows RFC 4180 (CRLF, quoted cells), starts with a UTF-8 byte-order mark so Excel reads other scripts, and
+  prefixes cells that start with `= + - @`, tab or carriage return with an apostrophe (formula injection).
+- **ZIP** stores entries uncompressed (the screenshots are already JPEG) with UTF-8 names. It refuses unsafe names
+  (`..`, absolute paths, backslashes, duplicates), which would let an unpacked archive write outside its folder. The
+  Markdown and its images sit in one top-level folder so unzipping never spills files into the current directory.
+- The screenshot file names (`step-01.jpg`, zero-padded to the step count) come from `imageName` in `modes.js`, so the
+  Markdown, the images in the ZIP and the CSV's `Screenshot` column always agree.
 
 ## Store assets
 
@@ -255,6 +290,10 @@ The automated tests use fakes, so these need a real browser:
 - [ ] **New session** saves to History. **Restore** and the history **PDF** work.
 - [ ] Remove a site under **Allowed sites** while recording. The recorder stops on that site.
 - [ ] Download a PDF and check the annotations, redactions and Pass/Fail markers.
+- [ ] Download the HTML in both modes and open it in a browser: images show, nothing is requested from a server, and
+      it prints cleanly.
+- [ ] Download Markdown + images, unzip it, and open the `.md` in a Markdown viewer: every image shows. Download the CSV
+      and open it in Excel or Numbers: columns line up and accented text is intact.
 - [ ] Reload the extension mid-recording. State resets cleanly.
 
 ## Privacy rules for contributors

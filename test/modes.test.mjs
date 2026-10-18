@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { modeOf, isTextStep, stepNumbers, resultFrom, fileNameFor, sessionLabel, CALLOUTS } from '../modes.js';
-import { cropFor } from '../annotate.js';
+import { cropFor, renderKey } from '../annotate.js';
 import { buildPdf } from '../pdf.js';
 
 // ---- modes.js ---------------------------------------------------------------------------------
@@ -28,6 +28,20 @@ assert.equal(sessionLabel({ mode: 'guide', guideTitle: ' Refunds ' }), 'Refunds'
 assert.equal(sessionLabel({ mode: 'guide' }), 'Untitled guide');
 assert.equal(sessionLabel({ ticket: 'PROJ-9' }), 'PROJ-9');
 assert.equal(sessionLabel({}), 'Untitled session');
+// file names keep every script, drop anything unsafe, and stay short
+assert.equal(fileNameFor({ mode: 'guide', guideTitle: '日本語の手順' }, '2026-10-20'), 'Guide-日本語の手順.pdf');
+assert.equal(fileNameFor({ mode: 'guide', guideTitle: 'नमस्ते दुनिया' }, '2026-10-20', 'zip'), 'Guide-नमस्ते_दुनिया.zip', 'combining marks are kept');
+assert.equal(fileNameFor({ mode: 'guide', guideTitle: 'Café Münster' }, '2026-10-20', 'html'), 'Guide-Café_Münster.html');
+assert.equal(fileNameFor({ ticket: '../../etc/passwd' }, '2026-10-20'), 'UAT-etc_passwd-2026-10-20.pdf', 'separators and leading dots never survive');
+assert.ok(!/[\/\\:*?"<>|]/.test(fileNameFor({ ticket: 'a/b\\c:d*e?f"g<h>i|j' }, '2026-10-20')), 'no character a file system rejects');
+assert.equal(fileNameFor({ mode: 'guide', guideTitle: '😀😀' }, '2026-10-20'), 'Guide-untitled.pdf', 'nothing usable left');
+assert.ok(fileNameFor({ mode: 'guide', guideTitle: 'x'.repeat(500) }, '2026-10-20').length < 100, 'length is capped');
+// truncation never splits a character and never leaves a trailing dot or underscore
+const astral = '\u{20BB7}'.repeat(100);                            // 𠮷 is outside the BMP: two UTF-16 units each
+const cut = fileNameFor({ mode: 'guide', guideTitle: astral }, '2026-10-20').replace(/^Guide-|\.pdf$/g, '');
+assert.equal(Array.from(cut).length, 80); assert.ok(!/[\uD800-\uDFFF]/.test(cut.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')), 'no lone surrogate');
+assert.equal(fileNameFor({ mode: 'guide', guideTitle: 'Orders.' }, '2026-10-20', 'zip'), 'Guide-Orders.zip', 'trailing dot removed');
+assert.equal(fileNameFor({ mode: 'guide', guideTitle: 'a'.repeat(79) + '!' + 'b' }, '2026-10-20'), 'Guide-' + 'a'.repeat(79) + '.pdf', 'cut ending on a separator is cleaned');
 console.log('ok  mode helpers');
 
 // ---- cropFor ----------------------------------------------------------------------------------
@@ -44,6 +58,23 @@ assert.equal(far.y + far.h, 900, 'clamped at the bottom-right');
 const small = cropFor({ zoom: true, annotations: [{ type: 'ring', x: 100, y: 100, r: 20 }] }, 400, 250);
 assert.deepEqual([small.x, small.y, small.w, small.h], [0, 0, 400, 250], 'a small screenshot is not cropped further');
 console.log('ok  zoom crop');
+
+// ---- renderKey: when a cached picture may be reused ------------------------------------------------------------------
+const base = { id: 1, ts: 100, annotations: [{ type: 'ring', x: 1, y: 2, r: 3 }], zoom: false, title: 'A', note: 'x' };
+const k0 = renderKey(base, false, 1600, 0.85);
+assert.equal(renderKey({ ...base, title: 'Renamed', note: 'other', status: 'pass', expected: 'e', actual: 'a', callout: 'tip' }, false, 1600, 0.85), k0, 'text fields are not part of the picture');
+for (const [what, other] of [
+  ['an annotation changed', renderKey({ ...base, annotations: [{ type: 'ring', x: 9, y: 2, r: 3 }] }, false, 1600, 0.85)],
+  ['an annotation added', renderKey({ ...base, annotations: [...base.annotations, { type: 'text', text: 'hi', x: 0, y: 0, size: 14, color: '#000' }] }, false, 1600, 0.85)],
+  ['zoom toggled', renderKey({ ...base, zoom: true }, false, 1600, 0.85)],
+  ['mode (guide crops)', renderKey(base, true, 1600, 0.85)],
+  ['width', renderKey(base, false, 1400, 0.85)],
+  ['quality', renderKey(base, false, 1600, 0.82)],
+  ['another step', renderKey({ ...base, id: 2 }, false, 1600, 0.85)],
+  ['the step was replaced (new timestamp)', renderKey({ ...base, ts: 101 }, false, 1600, 0.85)],
+]) assert.notEqual(other, k0, `${what} must produce a new key`);
+assert.equal(renderKey({ id: 1, ts: 1 }, false, 1600, 0.85), renderKey({ id: 1, ts: 1, annotations: [] }, false, 1600, 0.85), 'missing and empty annotations match');
+console.log('ok  the image cache key changes exactly when the picture can change');
 
 // ---- PDF layouts -------------------------------------------------------------------------------
 const jpg = (n) => new Uint8Array(readFileSync(new URL(`./${n}.jpg`, import.meta.url)));
