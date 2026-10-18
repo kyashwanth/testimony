@@ -47,9 +47,9 @@ const matchesPattern = (pattern, url) => {
 
 export function installFakeChrome({ granted = [], tabs = [] } = {}) {
   const store = {};
-  const calls = { register: [], unregister: 0, inject: [], captures: 0, created: [], badge: [] };
+  const calls = { register: [], unregister: 0, inject: [], captures: 0, captureTimes: [], quotaErrors: 0, created: [], badge: [] };
   const registered = [];
-  const state = { granted: [...granted], tabs: [...tabs], focusedWindow: 1, recorderTabs: new Set(tabs.map((t) => t.id)) };
+  const state = { granted: [...granted], tabs: [...tabs], focusedWindow: 1, recorderTabs: new Set(tabs.map((t) => t.id)), captureFailures: 0 };
   const session = {};
   const ev = { created: emitter(), removed_: emitter(), activated: emitter(), updated: emitter(), focus: emitter(), message: emitter(), command: emitter(), added: emitter(), removed: emitter(), installed: emitter(), startup: emitter() };
 
@@ -77,7 +77,16 @@ export function installFakeChrome({ granted = [], tabs = [] } = {}) {
         return state.tabs.filter((t) => t.url === q.url);
       },
       async get(id) { const tab = state.tabs.find((x) => x.id === id); if (!tab) throw new Error('No tab with id ' + id); return tab; },
-      async captureVisibleTab() { calls.captures++; return jpeg; },
+      async captureVisibleTab() {
+        const now = Date.now();
+        calls.captures++;
+        // Chrome allows at most 2 captureVisibleTab calls per second and throws when exceeded.
+        const recent = calls.captureTimes.filter((t) => t > now - 1000).length;
+        calls.captureTimes.push(now);
+        if (recent >= 2) { calls.quotaErrors++; throw new Error('This request exceeds the MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND quota.'); }
+        if (state.captureFailures > 0) { state.captureFailures--; throw new Error('Failed to capture tab: simulated failure'); }
+        return jpeg;
+      },
       async create(o) { calls.created.push(o.url); },
       async sendMessage(tabId) { if (state.recorderTabs.has(tabId)) return { ok: true }; throw new Error('Could not establish connection. Receiving end does not exist.'); },
       onCreated: ev.created, onRemoved: ev.removed_, onActivated: ev.activated, onUpdated: ev.updated,

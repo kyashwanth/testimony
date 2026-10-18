@@ -1,6 +1,7 @@
 import * as db from './db.js';
-import { COLORS, baseLW, baseFont, drawAnnotation, drawAnnotations, renderStep } from './annotate.js';
+import { COLORS, baseLW, baseFont, drawAnnotation, drawAnnotations, renderStep, cropFor } from './annotate.js';
 import { buildPdf } from './pdf.js';
+import { modeOf, MODES, isTextStep, stepNumbers, resultFrom, fileNameFor, sessionLabel } from './modes.js';
 
 const $ = (sel) => document.querySelector(sel);
 const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
@@ -63,7 +64,7 @@ async function load() {
 
 // ---- Session details -----------------------------------------------------------
 
-const FIELDS = ['ticket', 'env', 'tester', 'date', 'result', 'summary'];
+const FIELDS = ['ticket', 'env', 'tester', 'date', 'result', 'summary', 'guideTitle', 'author', 'version', 'prereq'];
 function fillMeta() {
   for (const f of FIELDS) {
     const el = $('#' + f);
@@ -74,21 +75,93 @@ for (const f of FIELDS) {
   $('#' + f).addEventListener('input', (e) => { meta[f] = e.target.value; saveMetaSoon(); });
 }
 
+// ---- Modes -----------------------------------------------------------------------------
+// A session is either a guide (how-to / SOP) or a test run (UAT evidence). The mode only changes how it is edited
+// and exported; switching never deletes anything.
+
+const guideMode = () => modeOf(meta) === 'guide';
+
+function applyMode() {
+  const guide = guideMode();
+  document.body.classList.toggle('mode-guide', guide);
+  document.body.classList.toggle('mode-test', !guide);
+  $('#edGuide').classList.toggle('on', guide);
+  $('#edTest').classList.toggle('on', !guide);
+  $('#dateLabel').textContent = guide ? 'Last updated' : 'Date';
+  $('#summaryLabel').textContent = guide ? 'Overview' : 'Summary';
+  $('#summary').placeholder = guide ? 'What this guide helps the reader do.' : 'What was tested, and anything worth knowing.';
+}
+
+async function setMode(next) {
+  if (modeOf(meta) === next) return;
+  meta.mode = next;
+  await db.setMeta({ mode: next });
+  applyMode();
+  render(); // the cards differ per mode
+  channel.postMessage('changed');
+}
+$('#edGuide').addEventListener('click', () => setMode('guide'));
+$('#edTest').addEventListener('click', () => setMode('test'));
+
 // ---- Step list -----------------------------------------------------------------
 
 async function drawPreview(step, canvas) {
   const bmp = await bitmapFor(step);
-  renderStep(canvas, bmp, step.annotations || [], Math.min(1, 1000 / bmp.width));
+  const crop = guideMode() ? cropFor(step, bmp.width, bmp.height) : null;
+  renderStep(canvas, bmp, step.annotations || [], Math.min(1, 1000 / (crop ? crop.w : bmp.width)), crop);
 }
 
-function stepCard(step, i) {
+const bind = (step, key) => (e) => { step[key] = e.target.value; saveStepSoon(step); };
+
+function stepFoot(step, i) {
   const multiTab = new Set(steps.map((s) => s.tab).filter(Boolean)).size > 1;
+  return h('div', { class: 'step-foot' },
+    multiTab && step.tab ? h('span', { class: 'tabpill', text: `Tab ${step.tab}` }) : '',
+    h('span', { class: 'url', text: step.url || '', title: step.url || '' }),
+    h('button', { text: 'Up', disabled: i === 0, onclick: () => move(step, -1) }),
+    h('button', { text: 'Down', disabled: i === steps.length - 1, onclick: () => move(step, 1) }),
+    h('button', { class: 'del', text: 'Delete', onclick: () => remove(step) }),
+  );
+}
+
+function stepCard(step, i, nums) {
+  const foot = stepFoot(step, i);
+
+  // Headings and text-only steps have no screenshot.
+  if (step.kind === 'heading') {
+    return h('article', { class: 'card step heading', 'data-id': step.id },
+      h('div', { class: 'step-head' }, h('span', { class: 'num', text: '#' }),
+        h('input', { class: 'title', value: step.title || '', placeholder: 'Section heading', 'aria-label': 'Section heading', oninput: bind(step, 'title') })),
+      foot);
+  }
+  if (step.kind === 'text') {
+    return h('article', { class: 'card step text', 'data-id': step.id },
+      h('div', { class: 'step-head' }, h('span', { class: 'num', text: '¶' }), h('b', { text: 'Text' })),
+      h('textarea', { rows: 3, placeholder: 'Write a paragraph. It appears in the PDF with no screenshot.', value: step.note || '', oninput: bind(step, 'note') }),
+      foot);
+  }
+
   const canvas = h('canvas');
   drawPreview(step, canvas);
+  const num = h('span', { class: 'num', text: String(nums[i]) });
+  const shot = h('div', { class: 'shot', onclick: () => openAnnotator(step) }, canvas, h('span', { class: 'badge', text: 'Click to annotate' }));
 
-  const title = h('input', { class: 'title', value: step.title || '', 'aria-label': 'Step title',
-    oninput: (e) => { step.title = e.target.value; saveStepSoon(step); } });
+  if (guideMode()) {
+    const title = h('input', { class: 'title', value: step.title || '', placeholder: 'What to do in this step', 'aria-label': 'Instruction', oninput: bind(step, 'title') });
+    const type = h('select', { 'aria-label': 'Callout type', onchange: (e) => { step.callout = e.target.value; saveStepSoon(step); } });
+    for (const [v, label] of [['', 'No callout'], ['tip', 'Tip'], ['warning', 'Warning'], ['note', 'Note']]) type.append(h('option', { value: v, text: label }));
+    type.value = step.callout || '';
+    const text = h('textarea', { rows: 2, placeholder: 'Optional tip, warning or note shown under this step', value: step.note || '', oninput: bind(step, 'note') });
+    const zoom = h('label', { class: 'zoom' },
+      h('input', { type: 'checkbox', checked: !!step.zoom, onchange: (e) => { step.zoom = e.target.checked; saveStepSoon(step); drawPreview(step, canvas); } }),
+      'Zoom to the clicked area in the PDF');
+    return h('article', { class: 'card step', 'data-id': step.id },
+      h('div', { class: 'step-head' }, num, title),
+      h('div', { class: 'callout' }, h('label', {}, 'Callout', type), h('label', {}, 'Text', text)),
+      zoom, shot, foot);
+  }
 
+  const title = h('input', { class: 'title', value: step.title || '', 'aria-label': 'Step title', oninput: bind(step, 'title') });
   const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Step result' });
   for (const [v, label] of [['pass', 'Pass'], ['fail', 'Fail']]) {
     seg.append(h('button', { 'data-v': v, class: step.status === v ? 'on' : '', text: label,
@@ -98,31 +171,34 @@ function stepCard(step, i) {
         saveStepSoon(step);
       } }));
   }
-
-  const note = h('textarea', { rows: 2, placeholder: 'Add a note: what you verified, expected vs actual…', value: step.note || '',
-    oninput: (e) => { step.note = e.target.value; saveStepSoon(step); } });
-
-  const shot = h('div', { class: 'shot', onclick: () => openAnnotator(step) }, canvas, h('span', { class: 'badge', text: 'Click to annotate' }));
-
-  const foot = h('div', { class: 'step-foot' },
-    multiTab && step.tab ? h('span', { class: 'tabpill', text: `Tab ${step.tab}` }) : '',
-    h('span', { class: 'url', text: step.url || '', title: step.url || '' }),
-    h('button', { text: 'Up', disabled: i === 0, onclick: () => move(step, -1) }),
-    h('button', { text: 'Down', disabled: i === steps.length - 1, onclick: () => move(step, 1) }),
-    h('button', { class: 'del', text: 'Delete', onclick: () => remove(step) }),
-  );
-
+  const expected = h('textarea', { rows: 2, placeholder: 'What should happen', value: step.expected || '', oninput: bind(step, 'expected') });
+  const actual = h('textarea', { rows: 2, placeholder: 'What actually happened', value: step.actual || '', oninput: bind(step, 'actual') });
+  const notes = h('textarea', { class: 'notes', rows: 1, placeholder: 'Notes (optional)', value: step.note || '', oninput: bind(step, 'note') });
   return h('article', { class: 'card step', 'data-id': step.id },
-    h('div', { class: 'step-head' }, h('span', { class: 'num', text: String(i + 1) }), title, seg),
-    note, shot, foot);
+    h('div', { class: 'step-head' }, num, title, seg),
+    h('div', { class: 'cols' }, h('label', {}, 'Expected', expected), h('label', {}, 'Actual', actual)),
+    notes, shot, foot);
 }
 
 function render() {
-  const list = $('#steps');
-  list.replaceChildren(...steps.map(stepCard));
+  const nums = stepNumbers(steps);
+  $('#steps').replaceChildren(...steps.map((s, i) => stepCard(s, i, nums)));
   $('#empty').hidden = steps.length > 0;
   $('#btnPdf').disabled = false;
 }
+
+// Adds a section heading or a paragraph (guides): steps with no screenshot.
+async function addTextStep(kind) {
+  await flushSaves();
+  await db.addStep({ kind, title: kind === 'heading' ? 'New section' : '', note: '', status: '', url: '', image: null, w: 0, h: 0, annotations: [], ts: Date.now() });
+  await load();
+  channel.postMessage('changed');
+  const last = $('#steps').lastElementChild;
+  last?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  last?.querySelector('input, textarea')?.focus();
+}
+$('#addHeading').addEventListener('click', () => addTextStep('heading'));
+$('#addText').addEventListener('click', () => addTextStep('text'));
 
 async function move(step, dir) {
   const i = steps.indexOf(step);
@@ -304,26 +380,27 @@ document.addEventListener('keydown', (e) => {
 
 // Turns steps into PDF bytes. `cache` reuses decoded bitmaps for the live session; archived steps decode on demand.
 async function renderPdf(list, metaObj, { cache = false, onProgress = () => {} } = {}) {
+  const guide = modeOf(metaObj) === 'guide';
   const prepared = [];
   for (let i = 0; i < list.length; i++) {
     onProgress(i + 1, list.length);
     const s = list[i];
+    if (isTextStep(s)) { prepared.push({ kind: s.kind, title: s.title, note: s.note }); continue; }
     const bmp = cache ? await bitmapFor(s) : await createImageBitmap(s.image);
+    const crop = guide ? cropFor(s, bmp.width, bmp.height) : null;
     const canvas = document.createElement('canvas');
-    renderStep(canvas, bmp, s.annotations || [], Math.min(1, 1600 / bmp.width));
+    renderStep(canvas, bmp, s.annotations || [], Math.min(1, 1600 / (crop ? crop.w : bmp.width)), crop);
     if (!cache) bmp.close();
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
     prepared.push({
-      title: s.title, note: s.note, status: s.status, url: s.url, tab: s.tab,
+      kind: s.kind, title: s.title, note: s.note, status: s.status, url: s.url, tab: s.tab,
+      expected: s.expected, actual: s.actual, callout: s.callout,
       jpeg: new Uint8Array(await blob.arrayBuffer()), w: canvas.width, h: canvas.height,
     });
   }
-  const statuses = list.map((s) => s.status);
-  const derived = statuses.includes('fail') ? 'fail' : statuses.length && statuses.every((v) => v === 'pass') ? 'pass' : '';
   const date = metaObj.date || today();
-  const bytes = buildPdf({ meta: { ...metaObj, date, result: metaObj.result || derived }, steps: prepared });
-  const name = `UAT-${(metaObj.ticket || 'evidence').trim()}-${date}.pdf`.replace(/[^\w.-]+/g, '_');
-  return { bytes, name };
+  const bytes = buildPdf({ meta: { ...metaObj, date, result: metaObj.result || resultFrom(list) }, steps: prepared });
+  return { bytes, name: fileNameFor(metaObj, date) };
 }
 
 function saveBlob(bytes, name) {
@@ -374,23 +451,25 @@ async function reloadAll() {
   bitmaps.clear();
   meta = await db.getMeta();
   fillMeta();
+  applyMode();
   await load();
   await refreshHistoryCount();
   channel.postMessage('changed');
 }
 
-const hasWork = () => steps.length > 0 || !!(meta.ticket || '').trim();
+const hasWork = () => steps.length > 0 || !!`${meta.ticket || ''}${meta.guideTitle || ''}`.trim();
 
 async function openHistory() {
   const list = await db.listSessions();
   $('#hEmpty').hidden = list.length > 0;
   $('#hList').replaceChildren(...list.map((s) => {
     const when = new Date(s.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-    const result = s.meta.result ? ` · ${s.meta.result}` : '';
+    const kind = modeOf(s.meta);
+    const result = kind === 'test' && s.meta.result ? ` · ${s.meta.result}` : '';
     return h('li', {},
       h('div', { class: 'info' },
-        h('b', { text: s.meta.ticket || 'Untitled session' }),
-        h('span', { text: `${when} · ${s.count} step${s.count === 1 ? '' : 's'}${result}` })),
+        h('b', { text: sessionLabel(s.meta) }),
+        h('span', { text: `${MODES[kind]} · ${when} · ${s.count} step${s.count === 1 ? '' : 's'}${result}` })),
       h('button', { text: 'Restore', onclick: () => restoreFromHistory(s.id) }),
       h('button', { text: 'PDF', onclick: (e) => pdfFromHistory(s.id, e.target) }),
       h('button', { class: 'del', text: 'Delete', onclick: async () => {
@@ -440,7 +519,7 @@ $('#btnNew').addEventListener('click', async () => {
     : 'Start a new session?');
   if (!ok) return;
   await flushSaves();
-  await db.startNewSession({ tester: meta.tester || '', env: meta.env || '' });
+  await db.startNewSession({ tester: meta.tester || '', env: meta.env || '', author: meta.author || '', mode: meta.mode });
   await reloadAll();
   if (saves) toast('Saved to History');
 });
@@ -453,12 +532,19 @@ async function syncRecording() {
   const { recording } = await chrome.storage.local.get('recording');
   $('#recPill').hidden = !recording;
 }
-channel.onmessage = async () => { await load(); syncRecording(); };
-window.addEventListener('focus', async () => { meta = await db.getMeta(); fillMeta(); });
+channel.onmessage = async () => {
+  // The popup may have switched the mode. Only the mode is taken from storage, so a field being typed is not overwritten.
+  const fresh = await db.getMeta();
+  if (modeOf(fresh) !== modeOf(meta)) { meta.mode = fresh.mode; applyMode(); }
+  await load();
+  syncRecording();
+};
+window.addEventListener('focus', async () => { meta = await db.getMeta(); fillMeta(); applyMode(); });
 
 (async function init() {
   meta = await db.getMeta();
   fillMeta();
+  applyMode();
   await load();
   syncRecording();
   refreshHistoryCount();

@@ -1,0 +1,46 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>recorder harness</title>
+<style>
+  body { font: 16px sans-serif; margin: 16px; background: #fff; color: #111 }
+  button, input { font: inherit; padding: 8px 12px; margin: 4px }
+  .row { display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #ddd; padding: 4px 0 }
+  #toast { position: fixed; right: 12px; top: 12px; background: #16a34a; color: #fff; padding: 8px 14px; border-radius: 8px; display: none }
+</style>
+<h3>Recorder harness (test page)</h3>
+<div id="list">
+  <div class="row"><span>Row A</span><button class="del">Delete</button></div>
+  <div class="row"><span>Row B</span><button class="del">Delete</button></div>
+  <div class="row"><span>Row C</span><button class="del">Delete</button></div>
+</div>
+<div>
+  <button id="plus">+</button> <span id="count">0</span>
+  <button id="open">Open file</button>
+  <button id="vanish">Remove me</button>
+  <button id="blocked">Blocked by page</button>
+  <input id="email" placeholder="Email address" style="width:200px">
+</div>
+<div id="toast">Done</div>
+<script>
+// ---- mocked extension environment (test only) ----
+const params = new URLSearchParams(location.search);
+window.__msgs = [];
+const startupDelay = Number(params.get('startupDelay') || 0); // how long "storage" takes to answer
+window.chrome = {
+  runtime: { id: 'test', sendMessage: (m) => { window.__msgs.push(m); return Promise.resolve(); }, onMessage: { addListener() {} } },
+  storage: {
+    local: { get: () => new Promise((r) => setTimeout(() => r({ recording: true }), startupDelay)) },
+    onChanged: { addListener() {} },
+  },
+};
+</script>
+<script src="/content.js"></script>
+<script>
+// ---- page behaviour, registered AFTER the recorder like a real page's scripts are ----
+document.querySelectorAll('.del').forEach((b) => b.addEventListener('click', () => { b.closest('.row').style.opacity = .4; }));
+let n = 0; document.getElementById('plus').addEventListener('click', () => { document.getElementById('count').textContent = ++n; });
+// a button that acts on mouse-down and removes itself, so no normal click ever reaches it
+document.getElementById('vanish').addEventListener('mousedown', (e) => { e.target.remove(); const t = document.getElementById('toast'); t.style.display = 'block'; });
+// a page that swallows clicks before they reach anything else
+window.addEventListener('click', (e) => { if (e.target.id === 'blocked') { e.stopImmediatePropagation(); e.stopPropagation(); } }, true);
+</script>

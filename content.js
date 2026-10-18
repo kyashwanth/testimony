@@ -7,9 +7,15 @@
   window.__testimonyLoaded = true;
 
   let recording = false;
+  let known = false; // true once we know whether recording is on
   const alive = () => { try { return !!chrome.runtime?.id; } catch { return false; } };
 
-  chrome.storage.local.get('recording').then((r) => { recording = !!r.recording; }).catch(() => {});
+  // The recorder is injected at document_start so nothing done during a page load is missed. Actions in the first
+  // few milliseconds wait on this promise for the answer instead of being dropped.
+  const ready = chrome.storage.local.get('recording')
+    .then((r) => { recording = !!r.recording; })
+    .catch(() => {})
+    .then(() => { known = true; });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.recording) recording = !!changes.recording.newValue;
   });
@@ -126,56 +132,120 @@
 
   // ---- Reporting -------------------------------------------------------------------------------------
 
-  // kind: 'click' | 'key' (Enter: the page is about to react, so the screenshot waits) | 'input' (typing/dropdown: immediate)
-  function report(kind, title, { point = null, rect = null } = {}) {
+  let counter = 0;
+  const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${counter++}`;
+
+  // Sends with a couple of retries (the extension's service worker can be starting up). Every message carries
+  // an id so a retry that was in fact delivered is not recorded twice.
+  function send(msg, attempt = 0) {
     if (!alive()) return;
-    const msg = { type: 'click-step', kind, title, url: location.href, pageTitle: document.title, point, rect };
-    try { chrome.runtime.sendMessage(msg).catch(() => {}); } catch { /* extension reloaded */ }
+    try {
+      chrome.runtime.sendMessage(msg).catch(() => {
+        if (attempt < 2) setTimeout(() => send(msg, attempt + 1), 250 * (attempt + 1));
+      });
+    } catch { /* extension reloaded */ }
   }
 
+  // kind: 'click' | 'key' (Enter: the page is about to react, so the screenshot waits) | 'input' (typing/dropdown: immediate)
+  function report(kind, title, { point = null, rect = null } = {}) {
+    const msg = { type: 'click-step', id: newId(), kind, title, url: location.href, pageTitle: document.title, point, rect };
+    ready.then(() => { if (recording) send(msg); });
+  }
+
+  const idle = () => known && !recording; // cheap early exit for the common "not recording" case
+
   // ---- Clicks -------------------------------------------------------------------------------------------
+  //
+  // Most clicks arrive as a normal "click" event. Pages that act on mouse-down and remove or replace the element
+  // (custom menus, some buttons) never deliver a usable click, so every press is remembered as well: if no click
+  // follows and the pressed element has gone, the press is recorded as the click it was.
+  // Listeners are on window in the capture phase, registered at document_start, so they run before the page's own
+  // handlers and cannot be pre-empted by a page that stops propagation.
 
-  // Clicking a <label> makes the browser fire a second click on its control; record only one step.
-  let forwarded = null;
+  const presses = new Set();
+  let forwarded = null; // clicking a <label> makes the browser fire a second click on its control: record one
   let forwardedAt = 0;
+  let lastClick = { title: null, x: 0, y: 0, at: 0 };
 
-  function onClick(e) {
-    if (!recording || !e.isTrusted) return;
-    if (!alive()) { document.removeEventListener('click', onClick, true); return; }
-    const raw = e.target instanceof Element ? e.target : e.target.parentElement;
-    if (!raw) return;
-    if (raw === forwarded && Date.now() - forwardedAt < 100) { forwarded = null; return; }
+  // Everything we need to describe an action, worked out immediately because the page may change the DOM next.
+  function snapshot(raw, e, keyboard) {
     let el = raw.closest(INTERACTIVE) || raw;
-    if (el.tagName === 'LABEL' && el.control) {
-      forwarded = el.control;
-      forwardedAt = Date.now();
-      el = el.control;
-    }
-    // Typing and dropdown choices are recorded from their own events. The click that focuses them is noise.
-    if (isTextField(el) || isSelect(el)) return;
-
-    // A keyboard-activated click (Enter/Space on a focused button) has no pointer position.
-    const keyboard = e.detail === 0 || (e.clientX === 0 && e.clientY === 0);
+    let viaLabel = false;
+    if (el.tagName === 'LABEL' && el.control) { el = el.control; viaLabel = true; }
     const frame = topFrame();
     const point = keyboard
       ? centerOf(el)
       : frame ? { x: e.clientX + frame.ox, y: e.clientY + frame.oy, vw: frame.vw, vh: frame.vh } : null;
-    report('click', describeClick(el), { point });
+    // Typing and dropdown choices are recorded from their own events. The click that focuses them is noise.
+    return { el, viaLabel, title: describeClick(el), point, skip: isTextField(el) || isSelect(el) };
   }
-  document.addEventListener('click', onClick, true);
+
+  const targetOf = (e) => (e.target instanceof Element ? e.target : e.target && e.target.parentElement);
+
+  window.addEventListener('pointerdown', (e) => {
+    if (idle() || !e.isTrusted || e.button !== 0) return;
+    const raw = targetOf(e);
+    if (!raw) return;
+    const snap = snapshot(raw, e, false);
+    if (snap.skip) return;
+    const press = { ...snap, pointerId: e.pointerId, at: Date.now(), done: false, released: false };
+    presses.add(press);
+    setTimeout(() => presses.delete(press), 3000);
+  }, true);
+
+  window.addEventListener('pointerup', (e) => {
+    if (!e.isTrusted || e.button !== 0) return;
+    const press = [...presses].reverse().find((p) => p.pointerId === e.pointerId && !p.released);
+    if (!press) return;
+    press.released = true;
+    setTimeout(() => {
+      // A normal click arrives within a few milliseconds. If none did and the element is gone, the page swallowed it.
+      if (!press.done && !press.el.isConnected) { press.done = true; report('click', press.title, { point: press.point }); }
+    }, 350);
+  }, true);
+
+  function onClick(e) {
+    if (!e.isTrusted) return;
+    if (!alive()) { window.removeEventListener('click', onClick, true); return; }
+    if (idle()) return;
+    const raw = targetOf(e);
+    if (!raw) return;
+    const keyboard = e.detail === 0 || (e.clientX === 0 && e.clientY === 0); // Enter/Space on a focused button
+    const now = Date.now();
+
+    const press = keyboard ? null : [...presses].reverse().find((p) => !p.done && now - p.at < 3000);
+    if (press) press.done = true;
+
+    if (raw === forwarded && now - forwardedAt < 100) { forwarded = null; return; }
+    let snap = snapshot(raw, e, keyboard);
+    if (snap.viaLabel) { forwarded = snap.el; forwardedAt = now; }
+    // The page replaced what was pressed: describe what the user actually pressed, not what is now under the pointer.
+    if (press && !press.el.isConnected) snap = press;
+    if (snap.skip) return;
+
+    // A true double-click (the browser says so, at the same spot, within 300 ms) is one step. Two deliberate
+    // clicks on the same control, even quick ones, are two steps.
+    const spot = snap.point ? { x: snap.point.x, y: snap.point.y } : { x: 0, y: 0 };
+    const sameSpot = Math.abs(spot.x - lastClick.x) < 8 && Math.abs(spot.y - lastClick.y) < 8;
+    if (e.detail > 1 && snap.title === lastClick.title && sameSpot && now - lastClick.at < 300) return;
+    lastClick = { title: snap.title, x: spot.x, y: spot.y, at: now };
+
+    report('click', snap.title, { point: snap.point });
+  }
+  window.addEventListener('click', onClick, true);
 
   // ---- Typing, Enter, dropdowns ----------------------------------------------------------------------------
 
   // A text field counts as "typed in" once its value is committed (blur or Enter), not per keystroke.
   const dirty = new WeakSet();
 
-  document.addEventListener('input', (e) => {
-    if (recording && e.isTrusted && e.target instanceof Element && isTextField(e.target)) dirty.add(e.target);
+  window.addEventListener('input', (e) => {
+    if (e.isTrusted && e.target instanceof Element && isTextField(e.target)) dirty.add(e.target);
   }, true);
 
-  document.addEventListener('change', (e) => {
+  window.addEventListener('change', (e) => {
     const el = e.target;
-    if (!recording || !e.isTrusted || !(el instanceof Element)) return;
+    if (idle() || !e.isTrusted || !(el instanceof Element)) return;
     if (isSelect(el)) return report('input', selectTitle(el), { rect: rectOf(el) });
     if (isFileInput(el)) return report('input', fileTitle(el), { rect: rectOf(el) });
     if (isTextField(el) && dirty.delete(el)) report('input', typedTitle(el), { rect: rectOf(el) });
@@ -183,8 +253,8 @@
 
   // Enter in a single-line field submits it. One step covers the typing and the Enter, so the
   // "change" event that follows finds the field already clean and adds nothing.
-  document.addEventListener('keydown', (e) => {
-    if (!recording || !e.isTrusted || e.key !== 'Enter' || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  window.addEventListener('keydown', (e) => {
+    if (idle() || !e.isTrusted || e.key !== 'Enter' || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     const el = e.target;
     if (!(el instanceof Element) || el.tagName !== 'INPUT' || !isTextField(el)) return;
     const typed = dirty.delete(el);

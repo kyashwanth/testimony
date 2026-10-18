@@ -11,18 +11,26 @@
 import * as db from './db.js';
 import { COLORS, baseLW } from './annotate.js';
 import { patternForUrl, webOrigins } from './sites.js';
+import { modeOf } from './modes.js';
+import { PLACEHOLDER_DATA_URL, PLACEHOLDER_W, PLACEHOLDER_H } from './placeholder.js';
 
 const channel = db.changes();
-const MIN_GAP_MS = 550; // captureVisibleTab is limited to ~2 calls per second
+// captureVisibleTab allows 2 calls per second. We allow a burst of 2 per 1.1 s window (a little margin) so
+// fast sequences are served as quickly as Chrome permits without ever tripping the quota.
+const SHOT_BURST = 2;
+const SHOT_WINDOW_MS = 1100;
+const LEAD_MS = 100;            // take a step's screenshot this long before the user's next action lands
+const SHOT_ATTEMPTS = 3;
+const SHOT_TIMEOUT_MS = 5000;
 const SCRIPT_ID = 'uat-recorder';
 const PENDING_START_TTL_MS = 60_000;
-const CHECK_DELAYS_MS = [1000, 3500]; // recorder injects at document_idle, so check twice after a load
-const DUPLICATE_WINDOW_MS = 600;      // same step twice inside this window = a double-click, keep one
-const SETTINGS_DEFAULTS = { captureDelayMs: 700, finalShot: true };
-let lastShot = 0;
+const CHECK_DELAYS_MS = [1000, 3500]; // check twice after a load, in case the page is slow to settle
+const SETTINGS_DEFAULTS = { captureDelayMs: 700, finalShot: true, finalShotGuide: false };
+let shotTimes = [];                   // when recent captureVisibleTab calls were made (for the quota)
+let arrivals = [];                    // when recent user actions arrived (so a step is shot before the next one)
+const seenIds = new Set();            // message ids already handled, so a retried message is not recorded twice
 let queue = Promise.resolve();
 let stopping = false;                 // while stopping, pending delayed captures are taken immediately
-let lastEvent = { title: null, tabId: null, at: 0 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const getSettings = async () => ({ ...SETTINGS_DEFAULTS, ...(await chrome.storage.local.get(Object.keys(SETTINGS_DEFAULTS))) });
@@ -99,25 +107,96 @@ function enqueue(job) {
   return queue;
 }
 
+// ---- Pacing -------------------------------------------------------------------------------
+
+function noteArrival(at) {
+  arrivals.push(at);
+  const cutoff = at - 30_000;
+  while (arrivals.length > 200 || (arrivals.length && arrivals[0] < cutoff)) arrivals.shift();
+}
+
+function alreadySeen(id) {
+  if (seenIds.has(id)) return true;
+  seenIds.add(id);
+  if (seenIds.size > 500) seenIds.delete(seenIds.values().next().value);
+  return false;
+}
+
+// Earliest time another screenshot may be requested without exceeding Chrome's per-second quota.
+function nextShotSlot(now = Date.now()) {
+  shotTimes = shotTimes.filter((t) => t > now - SHOT_WINDOW_MS);
+  return shotTimes.length >= SHOT_BURST ? shotTimes[shotTimes.length - SHOT_BURST] + SHOT_WINDOW_MS : 0;
+}
+
+async function waitForShotSlot() {
+  for (;;) {
+    const wait = nextShotSlot() - Date.now();
+    if (wait <= 0) return;
+    await sleep(Math.min(wait, 50));
+  }
+}
+
+// Waits until it is time to photograph a step: `delayMs` after the action so the page can react (toast, new
+// row...), but sooner if the user has already moved on, so the picture is not of a later step's result.
+// Re-evaluated while waiting, because the next action can arrive at any moment.
+async function waitUntilDue(eventAt, delayMs) {
+  for (;;) {
+    const now = Date.now();
+    let due = stopping ? now : eventAt + delayMs;
+    if (!stopping) {
+      const next = arrivals.find((a) => a > eventAt);
+      if (next !== undefined) due = Math.min(due, next - LEAD_MS);
+    }
+    due = Math.max(due, nextShotSlot(now));
+    if (due <= now) return;
+    await sleep(Math.min(due - now, 40));
+  }
+}
+
+const withTimeout = (promise, ms) => Promise.race([
+  promise,
+  new Promise((_, reject) => setTimeout(() => reject(new Error('screenshot timed out')), ms)),
+]);
+
+// Takes a screenshot, retrying on transient failures. It never throws: if Chrome keeps refusing, a placeholder
+// image is returned so the step is still recorded and the sequence stays complete.
+async function takeScreenshot(windowId) {
+  let lastError;
+  for (let attempt = 0; attempt < SHOT_ATTEMPTS; attempt++) {
+    if (attempt) await sleep(300);
+    await waitForShotSlot();
+    shotTimes.push(Date.now());
+    try {
+      return await withTimeout(screenshot(windowId), SHOT_TIMEOUT_MS);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  console.warn('[Testimony] screenshot failed, saving a placeholder:', lastError);
+  flashError();
+  const blob = await (await fetch(PLACEHOLDER_DATA_URL)).blob();
+  return { blob, w: PLACEHOLDER_W, h: PLACEHOLDER_H, failed: true };
+}
+
 // Takes the screenshot and stores the step. `delayMs` waits after the event so the page can react
 // (toast, new row...) before the screenshot; clicks and Enter use the user's setting, typing uses none.
 async function addCapture({ windowId, tabId, title, url, tabUrl, pageTitle, point, rect, kind, eventAt = Date.now(), delayMs = 0 }) {
-  const due = stopping ? lastShot + MIN_GAP_MS : Math.max(eventAt + delayMs, lastShot + MIN_GAP_MS);
-  if (due > Date.now()) await sleep(due - Date.now());
-  const shot = await screenshot(windowId);
-  lastShot = Date.now();
+  await waitUntilDue(eventAt, delayMs);
+  const shot = await takeScreenshot(windowId);
   const tab = await tabNumber(tabId);
 
   // If the page navigated during the delay, a marker placed at click time would point at unrelated content.
-  let keepMarks = true;
-  if (delayMs > 0 && tabUrl) {
+  let keepMarks = !shot.failed;
+  if (keepMarks && delayMs > 0 && tabUrl) {
     const now = await chrome.tabs.get(tabId).catch(() => null);
     keepMarks = !now || !now.url || now.url === tabUrl;
   }
 
   const annotations = [];
   const lw = baseLW(shot.w);
-  if (keepMarks && rect) {
+  if (shot.failed) {
+    annotations.push({ type: 'text', color: '#b45309', text: 'Screenshot could not be captured', x: 36, y: 168, size: 26 });
+  } else if (keepMarks && rect) {
     const k = shot.w / rect.vw;
     annotations.push({
       type: 'rect', color: COLORS[0], lw,
@@ -133,6 +212,7 @@ async function addCapture({ windowId, tabId, title, url, tabUrl, pageTitle, poin
   await db.addStep({
     title, note: '', status: '', kind, url: url || '', pageTitle: pageTitle || '', tab,
     image: shot.blob, w: shot.w, h: shot.h, annotations, ts: Date.now(),
+    ...(shot.failed ? { captureFailed: true } : {}),
   });
   channel.postMessage('changed');
   await refreshBadge();
@@ -174,7 +254,7 @@ async function syncRecorder() {
   if (!origins.length) return;
   await chrome.scripting.registerContentScripts([{
     id: SCRIPT_ID, js: ['content.js'], matches: origins,
-    allFrames: true, runAt: 'document_idle', persistAcrossSessions: false,
+    allFrames: true, runAt: 'document_start', persistAcrossSessions: false,
   }]);
 
   // Registered scripts only apply to future page loads, so also inject into tabs that are already open.
@@ -205,13 +285,14 @@ async function setRecording(on) {
 function captureFinal() {
   queue = queue.then(async () => {
     try {
-      const { finalShot } = await getSettings();
-      if (!finalShot || (await db.countSteps()) === 0) return;
+      const settings = await getSettings();
+      const guide = modeOf(await db.getMeta()) === 'guide';
+      if (!(guide ? settings.finalShotGuide : settings.finalShot) || (await db.countSteps()) === 0) return;
       const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
       if (!tab || (tab.url && tab.url.startsWith(chrome.runtime.getURL('')))) return;
       if (!inScope(await readScope(), tab)) return;
       await addCapture({
-        windowId: tab.windowId, tabId: tab.id, kind: 'final', title: 'Final state', url: tab.url, pageTitle: tab.title,
+        windowId: tab.windowId, tabId: tab.id, kind: 'final', title: guide ? 'Final screen' : 'Final state', url: tab.url, pageTitle: tab.title,
       });
     } catch (err) {
       console.warn('[Testimony] final screenshot skipped:', err);
@@ -244,24 +325,23 @@ async function toggle() {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg?.type) {
-    case 'click-step':
-      if (sender.tab && sender.tab.active) {
-        // Queue synchronously so a Stop that follows can never overtake this click; checks run inside the job.
-        const eventAt = Date.now();
-        enqueue(async () => {
-          if (!inScope(await readScope(), sender.tab)) return;
-          const dup = msg.title === lastEvent.title && sender.tab.id === lastEvent.tabId && eventAt - lastEvent.at < DUPLICATE_WINDOW_MS;
-          lastEvent = { title: msg.title, tabId: sender.tab.id, at: eventAt };
-          if (dup) return;
-          const { captureDelayMs } = await getSettings();
-          await addCapture({
-            windowId: sender.tab.windowId, tabId: sender.tab.id, kind: msg.kind || 'click', title: msg.title,
-            url: msg.url, tabUrl: sender.tab.url, pageTitle: msg.pageTitle, point: msg.point, rect: msg.rect,
-            eventAt, delayMs: msg.kind === 'input' ? 0 : captureDelayMs,
-          });
+    case 'click-step': {
+      if (!(sender.tab && sender.tab.active)) return false;
+      if (msg.id && alreadySeen(msg.id)) return false;
+      // Queue synchronously so a Stop that follows can never overtake this action; checks run inside the job.
+      const eventAt = Date.now();
+      noteArrival(eventAt);
+      enqueue(async () => {
+        if (!inScope(await readScope(), sender.tab)) return;
+        const { captureDelayMs } = await getSettings();
+        await addCapture({
+          windowId: sender.tab.windowId, tabId: sender.tab.id, kind: msg.kind || 'click', title: msg.title,
+          url: msg.url, tabUrl: sender.tab.url, pageTitle: msg.pageTitle, point: msg.point, rect: msg.rect,
+          eventAt, delayMs: msg.kind === 'input' ? 0 : captureDelayMs,
         });
-      }
+      });
       return false;
+    }
     case 'start': setRecording(true).then(() => sendResponse({ ok: true })); return true;
     case 'stop': stopRecording().then(() => sendResponse({ ok: true })); return true;
     case 'capture': captureActive().then(() => sendResponse({ ok: true })); return true;

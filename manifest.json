@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Testimony: Pics or It Didn't Happen",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "minimum_chrome_version": "102",
   "description": "Record UAT steps with screenshots, annotate them, add notes and download a PDF as proof of testing.",
   "permissions": ["storage", "unlimitedStorage", "scripting", "activeTab"],

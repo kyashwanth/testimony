@@ -23,10 +23,12 @@ the console of the page being tested.
 | `manifest.json` | Permissions, shortcuts, popup. No install-time host access (see below) |
 | `background.js` | Service worker: recording state, screenshots, recording scope, badge |
 | `content.js` | Recorder injected into allowed sites: clicks, typing, Enter, dropdowns |
+| `modes.js` | The two modes (guide / test run): mode helpers, step numbering, file names. Pure functions |
+| `placeholder.js` | The grey image used when a screenshot cannot be taken |
 | `popup.html/js/css` | Toolbar popup: site access, start/stop, options, allowed sites |
 | `editor.html/js/css` | Full-page editor: notes, Pass/Fail, annotation, History, PDF export |
-| `annotate.js` | Canvas drawing shared by the editor preview, annotator and PDF |
-| `pdf.js` | Dependency-free PDF writer (Helvetica text, JPEG screenshots) |
+| `annotate.js` | Canvas drawing shared by the editor preview, annotator and PDF, and the zoom crop |
+| `pdf.js` | Dependency-free PDF writer: the evidence report and the guide layouts |
 | `db.js` | IndexedDB storage: current session, metadata, session history |
 | `sites.js` | Pure helpers for validating and describing site match patterns |
 | `test/` | Node tests and browser harnesses |
@@ -46,6 +48,8 @@ node test/background.test.mjs   # service worker: start/stop, grants, shortcuts,
 node test/tabs.test.mjs         # tab scope, tab numbering, "!" badge detection
 node test/capture.test.mjs      # capture delay, event kinds, duplicates, final screenshot
 node test/history.test.mjs      # session archive, restore, 5-session limit
+node test/fastclicks.test.mjs   # bursts of fast actions: nothing lost, in order, within Chrome's screenshot quota
+node test/modes.test.mjs        # mode helpers, zoom crop, guide and evidence PDFs
 node test/pdf.test.mjs          # PDF structure and tab labels
 ```
 
@@ -59,6 +63,10 @@ If you add one, avoid fixed `sleep`s that race the capture queue.
 
 - `test/popup-harness.html` loads the real popup against a mocked `chrome` API. Add `?tab=<url>` to choose the
   tab URL. The mock is exposed as `window.__mock`.
+- `test/recorder-harness.html` loads the real `content.js` against a mocked `chrome` API on a page with awkward
+  buttons (same-named buttons in a list, a button that removes itself on mouse-down, a page that stops click
+  propagation). Add `?startupDelay=2500` to simulate slow start-up. Use it with real (trusted) clicks: the
+  recorder ignores synthetic events by design.
 - `test/legacy-db.html` builds a version-1 database and then opens the editor, to check the storage upgrade.
 - `editor.html` works without the extension APIs, so it can be opened over HTTP and seeded through `db.js`.
 
@@ -91,14 +99,47 @@ The permission prompt can close the popup before its promise resolves, so the po
 Starting from a keyboard shortcut cannot prompt, so it requires a site to be allowed already.
 
 ### Capture pipeline
-`content.js` reports each action to the service worker, which queues it. Clicks and Enter wait
-`captureDelayMs` (default 700 ms) so the page can react. Typing and dropdown changes are captured at once.
-Captures are spaced by at least 550 ms because `captureVisibleTab` is rate limited. Events are queued
-synchronously, so a Stop right after a click cannot overtake it. A delayed capture drops its click marker if the
-tab navigated in the meantime. Identical steps within 600 ms are treated as a double-click.
+`content.js` reports each action to the service worker, which queues it. Design goals: **never lose an action**, keep
+order, and respect Chrome's screenshot quota.
+
+- **Recorder (`content.js`)** is injected at `document_start` and listens on `window` in the capture phase, so it
+  is ready before the page's own scripts and cannot be pre-empted by a page that stops propagation. Actions in the
+  first milliseconds wait for the recording flag instead of being dropped.
+- **Clicks that never arrive.** Pages that act on mouse-down and remove the element send no usable `click`. Every
+  press is therefore remembered; if no click follows within 350 ms and the pressed element has left the DOM, the
+  press is reported as the click it was. If a click arrives on something else, the press is described instead.
+- **Double-click vs quick repeats.** Only a true double-click (`detail > 1`, same spot, within 300 ms) collapses
+  into one step. Two deliberate clicks on the same control are two steps. The service worker does no
+  title-based de-duplication.
+- **Delivery.** Messages carry an id and are retried twice, so a lost message is re-sent and a re-sent one is
+  recorded once.
+- **Pacing (`background.js`).** Clicks and Enter wait `captureDelayMs` (default 700 ms) so the page can react,
+  but a step is photographed *before the user's next action* (100 ms ahead of it) when one has already arrived,
+  so a fast sequence does not get the later steps' results. Typing and dropdown changes are captured at once.
+- **Quota.** `captureVisibleTab` allows 2 calls per second. The worker allows a burst of 2 per 1.1 s window and
+  waits for the next slot, so a burst is served as fast as Chrome permits without errors.
+- **Failures.** A failed screenshot is retried (3 attempts). If it still fails, the step is saved with the grey
+  `placeholder.js` image, `captureFailed: true`, and a note drawn on it, rather than being lost.
+- A Stop right after a click cannot overtake it (events are queued synchronously), and a delayed capture drops its
+  click marker if the tab navigated in the meantime.
 
 Typing is recorded when a field is committed (`change` or Enter), never per keystroke, and the value is never
 read. Clicks into text fields and selects are ignored, because their own events produce the step.
+
+### Modes
+A session is a *guide* or a *test run*: `meta.mode` is `'guide'` or absent/`'test'` (so existing sessions are test
+runs). The mode only affects presentation and export; data is never converted or deleted when it changes.
+
+| Concern | Where |
+|---|---|
+| Mode helpers, numbering that skips headings and text steps, file names, history labels | `modes.js` |
+| Mode switch, fields, step cards | `popup.js`, `editor.html/js/css` (body class `mode-guide` / `mode-test` and `data-only` attributes) |
+| Final screenshot default (on for tests, off for guides; separate settings `finalShot` / `finalShotGuide`) | `background.js` |
+| Layout of the document | `pdf.js` picks the guide or evidence layout from `meta.mode` |
+
+Step fields added for the modes: `expected`, `actual` (test runs), `callout` (`tip` / `warning` / `note`) and
+`zoom` (guides). Steps with `kind: 'heading'` or `'text'` have no image (`image: null`) and are not numbered. Guide
+fields in `meta`: `guideTitle`, `summary`, `prereq`, `author`, `version`, `date`. There is no database schema change.
 
 ### Recording scope
 `chrome.storage.session` holds the scope: the window recording started in, plus tabs opened from members
@@ -118,7 +159,9 @@ additive, and test the old shape with `test/legacy-db.html`.
 
 ### PDF
 `pdf.js` writes the file directly. Screenshots are embedded as JPEG without re-compression, text uses the
-built-in Helvetica fonts in WinAnsi encoding, which is why non-Latin characters become `?`.
+built-in Helvetica fonts in WinAnsi encoding, which is why non-Latin characters become `?`. The editor renders each
+step to a canvas first (with annotations, and the zoom crop for guides) and hands `pdf.js` plain data, so the writer
+itself has no DOM dependency and is unit tested in Node.
 
 ## Store assets
 
@@ -187,7 +230,16 @@ The automated tests use fakes, so these need a real browser:
 - [ ] Click through a flow on an allowed site. Steps appear with the right titles and markers.
 - [ ] Open a link in a new tab. It becomes "Tab 2", and the badge shows `!` on a site that is not allowed.
 - [ ] Type in a field, press Enter, pick a dropdown option. One step each, and the typed text is not recorded.
-- [ ] Press Stop. A "Final state" step is added and the editor opens.
+- [ ] Press Stop in a **test run**: a "Final state" step is added and the editor opens. In a **guide** none is added
+      by default.
+- [ ] Click quickly, one after another, through a list of buttons with the same name. Every click is a step, in
+      order. A double-click is one step.
+- [ ] Use a page where a button disappears on mouse-down, and click a link straight after a page loads. Both are
+      recorded.
+- [ ] Switch between **Guide** and **Test run** in the popup and in the editor. Fields and the PDF layout change,
+      and no data is lost when you switch back.
+- [ ] In a guide, add a heading and a text paragraph, set a tip and a warning, turn on zoom, and export. The
+      PDF has numbered steps, callouts and no Pass/Fail.
 - [ ] **New session** saves to History. **Restore** and the history **PDF** work.
 - [ ] Remove a site under **Allowed sites** while recording. The recorder stops on that site.
 - [ ] Download a PDF and check the annotations, redactions and Pass/Fail markers.

@@ -1,7 +1,9 @@
-// Minimal, dependency-free PDF writer for the UAT evidence report.
+// Minimal, dependency-free PDF writer for Testimony's two documents: UAT evidence reports and how-to guides.
 // Text uses the built-in Helvetica fonts (WinAnsi); screenshots are embedded
 // as JPEG (DCTDecode) so nothing is re-compressed. No DOM access, so it also
 // runs under Node for tests.
+
+import { modeOf, stepNumbers, isTextStep, CALLOUTS } from './modes.js';
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -125,7 +127,19 @@ const RESULT = {
   blocked: { label: 'BLOCKED', color: COLOR.warn },
 };
 
+const CALLOUT_STYLE = {
+  tip: { bar: [0.15, 0.39, 0.92], bg: [0.91, 0.94, 1.0] },
+  warning: { bar: [0.80, 0.52, 0.04], bg: [1.0, 0.97, 0.88] },
+  note: { bar: [0.42, 0.45, 0.50], bg: [0.95, 0.96, 0.97] },
+};
+
+const MAX_IMG_H = 500;
+
+// meta.mode picks the document: 'guide' is a how-to (instructions, tips, no results); anything else is a UAT
+// evidence report (ticket, result, Pass/Fail, expected vs actual).
 export function buildPdf({ meta = {}, steps = [], generatedAt = new Date() }) {
+  const guide = modeOf(meta) === 'guide';
+  const nums = stepNumbers(steps);
   const pages = [];
   let page;
   let y;
@@ -143,70 +157,151 @@ export function buildPdf({ meta = {}, steps = [], generatedAt = new Date() }) {
     }
   };
 
+  // A tinted box with a coloured edge and a bold label: tips, warnings, prerequisites.
+  const calloutHeight = (text) => 12 + 15 + wrap(text, 10, false, CONTENT_W - 22).length * 14 + 8;
+  const callout = (label, text, style) => {
+    const lines = wrap(text, 10, false, CONTENT_W - 22);
+    const h = calloutHeight(text);
+    ensure(h + 8);
+    page.rect(MARGIN, y, CONTENT_W, h, { fill: style.bg });
+    page.rect(MARGIN, y, 3.5, h, { fill: style.bar });
+    page.text(MARGIN + 14, y + 9, label, 10, { bold: true, color: style.bar });
+    let ty = y + 24;
+    for (const l of lines) { if (l) page.text(MARGIN + 14, ty, l, 10); ty += 14; }
+    y += h + 8;
+  };
+
+  const date = meta.date || generatedAt.toISOString().slice(0, 10);
+  const numbered = steps.filter((s) => !isTextStep(s));
+
   // ---- Header -------------------------------------------------------------
   newPage();
   page.rect(0, 0, PAGE_W, 6, { fill: COLOR.accent });
   y = MARGIN + 6;
-  page.text(MARGIN, y, 'UAT EVIDENCE', 9, { bold: true, color: COLOR.accent });
+  page.text(MARGIN, y, guide ? 'GUIDE' : 'UAT EVIDENCE', 9, { bold: true, color: COLOR.accent });
   y += 16;
-  const heading = meta.ticket ? enc(meta.ticket) : 'Untitled test session';
-  page.text(MARGIN, y, truncate(heading, 24, true, CONTENT_W), 24, { bold: true });
-  y += 38;
 
-  const date = meta.date || generatedAt.toISOString().slice(0, 10);
-  const result = RESULT[meta.result];
-  const counts = { pass: 0, fail: 0 };
-  steps.forEach((s) => { if (counts[s.status] !== undefined) counts[s.status]++; });
-
-  const rows = [
-    ['Environment', meta.env || '-'],
-    ['Tested by', meta.tester || '-'],
-    ['Date', date],
-    ['Steps', `${steps.length} captured` + (counts.pass || counts.fail ? `  (${counts.pass} passed, ${counts.fail} failed)` : '')],
-  ];
-  const labelW = 86;
-  for (const [k, v] of rows) {
-    page.text(MARGIN, y, k, 10, { color: COLOR.grey });
-    page.text(MARGIN + labelW, y, truncate(v, 10, false, CONTENT_W - labelW), 10);
-    y += 16;
-  }
-  page.text(MARGIN, y, 'Result', 10, { color: COLOR.grey });
-  if (result) {
-    const bw = width(result.label, 10, true) + 16;
-    page.rect(MARGIN + labelW, y - 3, bw, 17, { fill: result.color });
-    page.text(MARGIN + labelW + 8, y, result.label, 10, { bold: true, color: [1, 1, 1] });
+  if (guide) {
+    const title = (meta.guideTitle || '').trim() || 'Untitled guide';
+    page.text(MARGIN, y, truncate(title, 24, true, CONTENT_W), 24, { bold: true });
+    y += 34;
+    const by = [meta.author && `By ${meta.author}`, meta.version && `Version ${meta.version}`, `Updated ${date}`].filter(Boolean).join('   |   ');
+    page.text(MARGIN, y, truncate(by, 9, false, CONTENT_W), 9, { color: COLOR.grey });
+    y += 24;
+    if (meta.summary && meta.summary.trim()) { paragraph(meta.summary, 11.5); y += 8; }
+    if (meta.prereq && meta.prereq.trim()) callout('Before you start', meta.prereq, CALLOUT_STYLE.tip);
+    y += 6;
   } else {
-    page.text(MARGIN + labelW, y, '-', 10);
-  }
-  y += 26;
+    const heading = meta.ticket ? enc(meta.ticket) : 'Untitled test session';
+    page.text(MARGIN, y, truncate(heading, 24, true, CONTENT_W), 24, { bold: true });
+    y += 38;
 
-  if (meta.summary && meta.summary.trim()) {
-    page.line(MARGIN, y, PAGE_W - MARGIN);
-    y += 12;
-    paragraph('Summary', 11, { bold: true });
-    y += 2;
-    paragraph(meta.summary, 10);
+    const result = RESULT[meta.result];
+    const counts = { pass: 0, fail: 0 };
+    numbered.forEach((s) => { if (counts[s.status] !== undefined) counts[s.status]++; });
+    const rows = [
+      ['Environment', meta.env || '-'],
+      ['Tested by', meta.tester || '-'],
+      ['Date', date],
+      ['Steps', `${numbered.length} captured` + (counts.pass || counts.fail ? `  (${counts.pass} passed, ${counts.fail} failed)` : '')],
+    ];
+    const labelW = 86;
+    for (const [k, v] of rows) {
+      page.text(MARGIN, y, k, 10, { color: COLOR.grey });
+      page.text(MARGIN + labelW, y, truncate(v, 10, false, CONTENT_W - labelW), 10);
+      y += 16;
+    }
+    page.text(MARGIN, y, 'Result', 10, { color: COLOR.grey });
+    if (result) {
+      const bw = width(result.label, 10, true) + 16;
+      page.rect(MARGIN + labelW, y - 3, bw, 17, { fill: result.color });
+      page.text(MARGIN + labelW + 8, y, result.label, 10, { bold: true, color: [1, 1, 1] });
+    } else {
+      page.text(MARGIN + labelW, y, '-', 10);
+    }
+    y += 26;
+
+    if (meta.summary && meta.summary.trim()) {
+      page.line(MARGIN, y, PAGE_W - MARGIN);
+      y += 12;
+      paragraph('Summary', 11, { bold: true });
+      y += 2;
+      paragraph(meta.summary, 10);
+    }
+    y += 8;
   }
-  y += 8;
 
   // ---- Steps --------------------------------------------------------------
-  const MAX_IMG_H = 500;
   const multiTab = new Set(steps.map((s) => s.tab).filter(Boolean)).size > 1;
-  steps.forEach((s, i) => {
-    const where = [multiTab && s.tab ? `Tab ${s.tab}` : '', s.url || ''].filter(Boolean).join('  |  ');
-    const titleLines = wrap(`${i + 1}. ${s.title || 'Step'}`, 12, true, CONTENT_W);
-    const noteLines = s.note && s.note.trim() ? wrap(s.note, 10, false, CONTENT_W) : [];
+
+  // Keeps a step together on one page when it fits on a fresh page, otherwise lets it flow.
+  const keepTogether = (blockH) => {
+    if (blockH <= BOTTOM - MARGIN && blockH > remaining()) newPage();
+    else ensure(60);
+  };
+  const fitImage = (s) => {
     let iw = CONTENT_W;
     let ih = iw * (s.h / s.w);
     if (ih > MAX_IMG_H) { ih = MAX_IMG_H; iw = ih * (s.w / s.h); }
+    return { iw, ih };
+  };
+  const drawImage = (s, iw, ih) => {
+    ensure(ih);
+    page.image({ data: s.jpeg, w: s.w, h: s.h }, MARGIN, y, iw, ih);
+    y += ih + 14;
+  };
 
+  // A heading draws its own rule, so the step right after it should not add another one.
+  let afterHeading = false;
+  const separator = () => {
+    if (!afterHeading) { page.line(MARGIN, y, PAGE_W - MARGIN); y += 12; }
+    afterHeading = false;
+  };
+
+  steps.forEach((s, i) => {
+    if (s.kind === 'heading') {
+      const lines = wrap(s.title || 'Section', 15, true, CONTENT_W);
+      ensure(lines.length * 21 + 70); // never leave a heading alone at the bottom of a page
+      y += 10;
+      for (const l of lines) { page.text(MARGIN, y, l, 15, { bold: true }); y += 21; }
+      page.line(MARGIN, y, PAGE_W - MARGIN, { color: COLOR.accent, lw: 1.25 });
+      y += 14;
+      afterHeading = true;
+      return;
+    }
+    if (s.kind === 'text') {
+      afterHeading = false;
+      if (s.note && s.note.trim()) { paragraph(s.note, 10.5); y += 8; }
+      return;
+    }
+
+    const n = nums[i];
+    const note = s.note && s.note.trim() ? s.note : '';
+    const { iw, ih } = fitImage(s);
+
+    if (guide) {
+      const titleLines = wrap(`${n}. ${s.title || 'Step'}`, 12.5, true, CONTENT_W);
+      keepTogether(titleLines.length * 17 + (note ? calloutHeight(note) + 8 : 0) + 6 + ih + 26);
+      separator();
+      for (const l of titleLines) { ensure(17); page.text(MARGIN, y, l, 12.5, { bold: true }); y += 17; }
+      y += 4;
+      if (note) callout(CALLOUTS[s.callout] || 'Note', note, CALLOUT_STYLE[s.callout] || CALLOUT_STYLE.note);
+      if (s.jpeg) drawImage(s, iw, ih);
+      return;
+    }
+
+    const where = [multiTab && s.tab ? `Tab ${s.tab}` : '', s.url || ''].filter(Boolean).join('  |  ');
+    const titleLines = wrap(`${n}. ${s.title || 'Step'}`, 12, true, CONTENT_W);
+    const labelled = [['Expected', s.expected], ['Actual', s.actual]]
+      .filter(([, v]) => v && v.trim())
+      .map(([label, v]) => ({ label, lines: wrap(v, 10, false, CONTENT_W - 62) }));
+    const noteLines = note ? wrap(note, 10, false, CONTENT_W) : [];
     const status = STATUS[s.status];
-    const blockH = titleLines.length * 16.5 + (status ? 15 : 0) + (where ? 13 : 0) + noteLines.length * 14 + 6 + ih + 26;
-    if (blockH <= BOTTOM - MARGIN && blockH > remaining()) newPage();
-    else ensure(60);
+    const blockH = titleLines.length * 16.5 + (status ? 15 : 0) + (where ? 13 : 0)
+      + labelled.reduce((t, l) => t + l.lines.length * 14, 0) + noteLines.length * 14 + 6 + ih + 26;
+    keepTogether(blockH);
 
-    page.line(MARGIN, y, PAGE_W - MARGIN);
-    y += 12;
+    separator();
     for (const l of titleLines) { ensure(16.5); page.text(MARGIN, y, l, 12, { bold: true }); y += 16.5; }
     if (status) {
       ensure(15);
@@ -218,17 +313,26 @@ export function buildPdf({ meta = {}, steps = [], generatedAt = new Date() }) {
       page.text(MARGIN, y, truncate(where, 8, false, CONTENT_W), 8, { color: COLOR.grey });
       y += 13;
     }
+    for (const { label, lines } of labelled) {
+      lines.forEach((l, k) => {
+        ensure(14);
+        if (k === 0) page.text(MARGIN, y, label, 9, { bold: true, color: COLOR.grey });
+        if (l) page.text(MARGIN + 62, y, l, 10);
+        y += 14;
+      });
+    }
     for (const l of noteLines) { ensure(14); if (l) page.text(MARGIN, y, l, 10); y += 14; }
     y += 6;
-    ensure(ih);
-    page.image({ data: s.jpeg, w: s.w, h: s.h }, MARGIN, y, iw, ih);
-    y += ih + 14;
+    if (s.jpeg) drawImage(s, iw, ih);
   });
 
-  if (!steps.length) paragraph('No steps were captured.', 10, { color: COLOR.grey });
+  if (!numbered.length && !steps.length) paragraph('No steps were captured.', 10, { color: COLOR.grey });
 
   // ---- Footer on every page -------------------------------------------------
-  const footerLabel = enc(`${meta.ticket ? meta.ticket + '  |  ' : ''}UAT evidence  |  generated ${generatedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC`);
+  const stamp = generatedAt.toISOString().slice(0, 16).replace('T', ' ');
+  const footerLabel = guide
+    ? enc(`${(meta.guideTitle || '').trim() || 'Guide'}  |  updated ${date}`)
+    : enc(`${meta.ticket ? meta.ticket + '  |  ' : ''}UAT evidence  |  generated ${stamp} UTC`);
   pages.forEach((p, i) => {
     p.line(MARGIN, PAGE_H - 34, PAGE_W - MARGIN);
     p.text(MARGIN, PAGE_H - 28, truncate(footerLabel, 8, false, CONTENT_W - 70), 8, { color: COLOR.grey });
@@ -283,7 +387,9 @@ function serialize(pages, meta) {
     });
   });
 
-  const title = esc(enc(meta.ticket ? `UAT evidence - ${meta.ticket}` : 'UAT evidence'));
+  const title = esc(enc(modeOf(meta) === 'guide'
+    ? `Guide - ${(meta.guideTitle || '').trim() || 'untitled'}`
+    : (meta.ticket ? `UAT evidence - ${meta.ticket}` : 'UAT evidence')));
   obj(infoNum, `<< /Title (${title}) /Producer (Testimony) /Creator (Testimony) >>`);
 
   const xrefAt = length;

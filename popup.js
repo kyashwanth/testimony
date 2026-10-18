@@ -1,5 +1,6 @@
 import * as db from './db.js';
 import { isWebUrl, patternForUrl, normalizePattern, webOrigins, label } from './sites.js';
+import { modeOf } from './modes.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -7,15 +8,40 @@ let tab = null;          // the tab the popup was opened on
 let recording = false;
 let siteAllowed = false; // is the current tab's site already allowed?
 let grantedCount = 0;
+let mode = 'test';       // 'guide' or 'test': what this session is for (stored with the session)
+let finalShotSettings = { finalShot: true, finalShotGuide: false };
+const channel = db.changes();
 
 function message(text) {
   $('msg').textContent = text || '';
   $('msg').hidden = !text;
 }
 
+// Shows the fields, wording and options that belong to the current mode.
+function applyMode() {
+  const guide = mode === 'guide';
+  $('modeGuide').classList.toggle('on', guide);
+  $('modeTest').classList.toggle('on', !guide);
+  $('guideFields').hidden = !guide;
+  $('testFields').hidden = guide;
+  $('finalLabel').textContent = guide ? 'Add a closing screenshot when I stop' : 'Add a final screenshot when I stop';
+  $('finalShot').checked = guide ? finalShotSettings.finalShotGuide : finalShotSettings.finalShot;
+}
+
+async function setMode(next) {
+  if (next === mode) return;
+  mode = next;
+  await db.setMeta({ mode });
+  applyMode();
+  channel.postMessage('changed'); // the editor, if open, switches too
+  refresh();
+}
+
 async function refresh() {
   ({ recording } = await chrome.storage.local.get('recording'));
   recording = !!recording;
+  const wanted = modeOf(await db.getMeta());
+  if (wanted !== mode) { mode = wanted; applyMode(); }
   const n = await db.countSteps();
   const { origins = [] } = await chrome.permissions.getAll();
   const granted = webOrigins(origins);
@@ -47,9 +73,10 @@ async function refresh() {
   $('toggle').textContent = recording ? 'Stop & review' : needsGrant ? 'Allow site & start recording' : 'Start recording';
   $('toggle').classList.toggle('recording', recording);
   $('toggle').disabled = !recording && !web && grantedCount === 0;
+  const guide = mode === 'guide';
   $('hint').textContent = recording
-    ? 'Recording. Work through your test; each action becomes a step.'
-    : 'Captures each click, typed field and dropdown choice on allowed sites.';
+    ? (guide ? 'Recording. Do the task as you would show it; each action becomes a step.' : 'Recording. Work through your test; each action becomes a step.')
+    : (guide ? 'Captures each click and choice as a step in your guide, on allowed sites.' : 'Captures each click, typed field and dropdown choice on allowed sites.');
   $('count').textContent = `${n} step${n === 1 ? '' : 's'}`;
 
   // -- allowed sites list
@@ -96,18 +123,28 @@ async function init() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
   const meta = await db.getMeta();
+  mode = modeOf(meta);
   $('ticket').value = meta.ticket || '';
   $('env').value = meta.env || '';
-  for (const id of ['ticket', 'env']) {
+  $('guideTitle').value = meta.guideTitle || '';
+  for (const id of ['ticket', 'env', 'guideTitle']) {
     $(id).addEventListener('input', () => db.setMeta({ [id]: $(id).value.trim() }));
   }
+  $('modeGuide').addEventListener('click', () => setMode('guide'));
+  $('modeTest').addEventListener('click', () => setMode('test'));
 
-  // -- capture options (read by the service worker at capture time)
-  const { captureDelayMs = 700, finalShot = true } = await chrome.storage.local.get(['captureDelayMs', 'finalShot']);
-  $('delay').value = String(captureDelayMs);
-  $('finalShot').checked = finalShot;
+  // -- capture options (read by the service worker at capture time). The final screenshot is remembered per mode:
+  //    on for test runs, off for guides.
+  const stored = await chrome.storage.local.get(['captureDelayMs', 'finalShot', 'finalShotGuide']);
+  finalShotSettings = { finalShot: stored.finalShot ?? true, finalShotGuide: stored.finalShotGuide ?? false };
+  $('delay').value = String(stored.captureDelayMs ?? 700);
+  applyMode();
   $('delay').addEventListener('change', () => chrome.storage.local.set({ captureDelayMs: Number($('delay').value) }));
-  $('finalShot').addEventListener('change', () => chrome.storage.local.set({ finalShot: $('finalShot').checked }));
+  $('finalShot').addEventListener('change', () => {
+    const key = mode === 'guide' ? 'finalShotGuide' : 'finalShot';
+    finalShotSettings[key] = $('finalShot').checked;
+    chrome.storage.local.set({ [key]: $('finalShot').checked });
+  });
 
   $('toggle').addEventListener('click', async () => {
     message('');
@@ -140,7 +177,7 @@ async function init() {
     window.close();
   });
 
-  db.changes().onmessage = refresh;
+  channel.onmessage = refresh;
   chrome.permissions.onAdded.addListener(refresh);
   chrome.permissions.onRemoved.addListener(refresh);
   refresh();

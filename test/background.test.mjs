@@ -47,17 +47,20 @@ assert.equal(step.annotations[0].x, 200); // 100 * (1440/720)
 assert.equal(t.calls.badge.at(-1), '1');
 console.log('ok  click -> step with scaled marker, badge = 1');
 
-// 3. The same step twice in quick succession (a double-click) keeps one step
-await t.send({ type: 'click-step', title: "Click the 'Sign in' button", url: 'u', pageTitle: 'p', point: null }, activeSender);
+// 3. A message delivered twice (the recorder retries) is one step; a genuinely repeated action is another step
+const retry = { type: 'click-step', id: 'retry-1', title: "Click the 'Sign in' button", url: 'u', pageTitle: 'p', point: null };
+await t.send(retry, activeSender);
+await t.send(retry, activeSender);
+await until(() => steps() === 2);
 await settle(300);
-assert.equal(steps(), 1, 'duplicate inside 600ms ignored');
-console.log('ok  double-click keeps one step');
+assert.equal(steps(), 2, 'same message id recorded once; the first click plus this one');
+console.log('ok  a retried message is recorded once');
 
 // 4. Clicks from a background tab are ignored
 await settle(600);
 await t.send({ type: 'click-step', title: 'bg', url: 'u', pageTitle: 'p', point: null }, { tab: { id: 2, windowId: 1, active: false } });
 await settle(300);
-assert.equal(steps(), 1);
+assert.equal(steps(), 2, 'no new step from the background tab');
 console.log('ok  background-tab click ignored');
 
 // 5. Granting another site while recording re-registers with both

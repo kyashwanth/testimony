@@ -64,5 +64,23 @@ assert.ok(!(await db.listSessions()).some((s) => s.id === first.id));
 assert.equal(await db.restoreSession(99999), false);
 console.log('ok  delete works; restoring an unknown id is a no-op');
 
+// 7. A session keeps its mode in history, and a new session can carry the mode over
+await db.resetMeta({ mode: 'guide', guideTitle: 'Refunds', author: 'Jane' });
+await db.addStep(step('only'));
+await db.startNewSession({ mode: 'guide', author: 'Jane' });
+const [latest] = await db.listSessions();
+assert.equal(latest.meta.mode, 'guide');
+assert.equal(latest.meta.guideTitle, 'Refunds');
+assert.deepEqual(await db.getMeta(), { mode: 'guide', author: 'Jane' }, 'the next session starts in the same mode with the author kept');
+// steps without a screenshot (headings, text) survive archiving and restoring
+await db.addStep({ kind: 'heading', title: 'Setup', note: '', image: null, w: 0, h: 0, annotations: [], ts: 1 });
+await db.addStep({ kind: 'text', title: '', note: 'Read this first', image: null, w: 0, h: 0, annotations: [], ts: 2 });
+await db.startNewSession({});
+const withText = (await db.listSessions())[0];
+assert.equal(withText.count, 2);
+await db.restoreSession(withText.id);
+assert.deepEqual((await db.getSteps()).map((x) => [x.kind, x.title || x.note]), [['heading', 'Setup'], ['text', 'Read this first']]);
+console.log('ok  mode and text-only steps survive history');
+
 console.log('\nhistory tests passed');
 process.exit(0);

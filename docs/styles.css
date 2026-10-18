@@ -54,6 +54,7 @@ h2 { font-size: clamp(28px, 3.6vw, 38px); letter-spacing: -.02em; line-height: 1
 .sub { color: var(--muted); font-size: 19px; margin: 0 0 40px; max-width: 40em; }
 h3 { font-size: 19px; margin: 0 0 6px; }
 .grid { display: grid; gap: 20px; }
+.grid.f2 { grid-template-columns: repeat(2, 1fr); }
 .grid.f3 { grid-template-columns: repeat(3, 1fr); }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
 .card p { margin: 0; color: var(--muted); font-size: 16px; }
@@ -103,7 +104,7 @@ footer.site .links { display: flex; gap: 22px; flex-wrap: wrap; }
 @media (max-width: 860px) {
   .hero .wrap, .shot, .shot:nth-child(even) { grid-template-columns: 1fr; }
   .shot:nth-child(even) .txt { order: 0; }
-  .grid.f3 { grid-template-columns: 1fr; }
+  .grid.f2, .grid.f3 { grid-template-columns: 1fr; }
   .hero { padding-top: 44px; }
   section { padding: 52px 0; }
   nav { gap: 16px; } header.site .wrap { height: auto; padding-top: 12px; padding-bottom: 12px; flex-wrap: wrap; gap: 8px 20px; }

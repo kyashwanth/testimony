@@ -95,16 +95,17 @@ await until(() => steps().length === 1);
 assert.equal(steps()[0].annotations.length, 0, 'marker dropped: it would point at different content');
 console.log('ok  marker is dropped when the page navigated during the delay');
 
-// 6. Duplicate suppression: same step twice = one; different steps are both kept, in event order
+// 6. Rapid actions are all kept, in event order, including repeats of the same control
+//    (collapsing a true double-click happens in the recorder, which can tell from the browser)
 await fresh();
 t.store.captureDelayMs = 100;
 await click('Click Save');
 await click('Click Save');
 await click('Click Next');
-await until(() => steps().length === 2);
+await until(() => steps().length === 3);
 await settle(400);
-assert.deepEqual(steps().map((s) => s.title), ['Click Save', 'Click Next']);
-console.log('ok  double-click collapsed; distinct rapid steps are kept in order');
+assert.deepEqual(steps().map((s) => s.title), ['Click Save', 'Click Save', 'Click Next']);
+console.log('ok  rapid actions are all kept in order, repeats included');
 
 // 7. Click then typing straight after (blur triggers "typed", then submit click): neither is lost
 await fresh();
@@ -176,6 +177,28 @@ await t.send({ type: 'capture' });
 assert.equal(steps().length, 1);
 assert.ok(Date.now() - t11 < 1500, 'manual screenshot ignores the delay');
 console.log('ok  manual screenshots ignore the delay');
+
+// 12. The final screenshot follows the mode: test runs get one by default, guides do not (and call it "Final screen")
+const { setMeta } = await import('../db.js');
+const runSession = async (mode, settings) => {
+  await fresh();
+  t.store.captureDelayMs = 0;
+  delete t.store.finalShot; delete t.store.finalShotGuide;
+  Object.assign(t.store, settings);
+  t.state.tabs = t.state.tabs.filter((x) => x.id === 1); t.state.tabs[0].active = true;
+  await setMeta({ mode });
+  await t.send({ type: 'start' });
+  await click('Click once');
+  await until(() => steps().length === 1);
+  await t.send({ type: 'stop' });
+  return steps().map((s) => s.title);
+};
+assert.deepEqual(await runSession('guide', {}), ['Click once'], 'a guide gets no final screenshot by default');
+assert.deepEqual(await runSession('guide', { finalShotGuide: true }), ['Click once', 'Final screen'], 'but can opt in');
+assert.deepEqual(await runSession('test', {}), ['Click once', 'Final state'], 'a test run gets one by default');
+assert.deepEqual(await runSession('test', { finalShot: false }), ['Click once'], 'and can opt out');
+assert.deepEqual(await runSession('test', { finalShot: false, finalShotGuide: true }), ['Click once'], 'the two settings are independent');
+console.log('ok  the final screenshot follows the mode, with separate settings');
 
 console.log('\ncapture tests passed');
 process.exit(0);

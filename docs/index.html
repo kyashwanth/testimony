@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Testimony: Pics or It Didn't Happen | Test evidence for Chrome</title>
-  <meta name="description" content="Testimony is a Chrome extension that records your manual test steps as annotated screenshots and downloads them as a PDF you can attach to a ticket. Nothing leaves your computer.">
+  <title>Testimony: Pics or It Didn't Happen | Guides and test evidence for Chrome</title>
+  <meta name="description" content="Testimony is a Chrome extension that records what you do as annotated screenshots and turns it into a step-by-step guide or test evidence PDF. Nothing leaves your computer.">
   <link rel="canonical" href="https://kyashwanth.github.io/testimony/">
   <link rel="icon" type="image/png" href="assets/favicon-32.png">
   <meta name="theme-color" content="#2563eb">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Testimony: Pics or It Didn't Happen">
-  <meta property="og:description" content="Click through your test. Get a PDF of every step with screenshots, notes and results. Private by design.">
+  <meta property="og:description" content="Click through a task. Get a how-to guide or test evidence as a PDF, with screenshots, notes and results. Private by design.">
   <meta property="og:url" content="https://kyashwanth.github.io/testimony/">
   <meta property="og:image" content="https://kyashwanth.github.io/testimony/assets/social-card.jpg">
   <meta name="twitter:card" content="summary_large_image">
@@ -37,9 +37,9 @@
     <section class="hero">
       <div class="wrap">
         <div>
-          <span class="eyebrow">Test evidence for Chrome</span>
+          <span class="eyebrow">Guides and test evidence for Chrome</span>
           <h1>Pics or it didn't happen.</h1>
-          <p class="lead">Testimony turns a manual test session into proof you can attach to a ticket. Click through your test as normal, then download a PDF of every step with its screenshot, notes and result.</p>
+          <p class="lead">Testimony turns what you do in the browser into a document you can share. Click through a task, then download a step-by-step guide, or test evidence with Pass and Fail results, as a PDF.</p>
           <div class="cta">
             <span class="btn soon" role="note">Coming soon to the Chrome Web Store</span>
             <a class="btn" href="https://github.com/kyashwanth/testimony">View on GitHub</a>
@@ -52,10 +52,27 @@
       </div>
     </section>
 
+    <section id="modes" class="soft">
+      <div class="wrap">
+        <h2>One recording, two kinds of document</h2>
+        <p class="sub">Choose a mode when you start, or switch later. Nothing is lost when you switch, so a recording can become either document.</p>
+        <div class="grid f2">
+          <div class="card">
+            <h3>Create a guide</h3>
+            <p>A clean how-to or SOP. Give it a title and overview, then polish each instruction with tips, warnings and notes. Add section headings and text-only paragraphs, and zoom into the area that was clicked. The PDF is a numbered guide with no results.</p>
+          </div>
+          <div class="card">
+            <h3>Run a test</h3>
+            <p>Evidence for a ticket. Record the ticket, environment and tester, mark each step Pass or Fail, and write what you expected and what actually happened. The PDF is an evidence report with the overall result.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="features">
       <div class="wrap">
-        <h2>Everything a UAT sign-off needs, nothing it doesn't</h2>
-        <p class="sub">Testers lose hours taking screenshots, pasting them into documents and writing up what happened. Testimony does the capturing so you can do the testing.</p>
+        <h2>Everything a sign-off or a how-to needs, nothing it doesn't</h2>
+        <p class="sub">People lose hours taking screenshots, pasting them into documents and writing up what happened. Testimony does the capturing so you can do the work.</p>
         <div class="grid f3">
           <div class="card"><h3>Records as you test</h3><p>Every click, typed field and dropdown choice becomes a step with a screenshot, named for you: "Click the 'Save' button", "Selected 'INR' in the 'Currency' dropdown".</p></div>
           <div class="card"><h3>Captures the result</h3><p>Screenshots are taken just after each action, so the success message or new table row is in the picture. A final screenshot is added when you stop.</p></div>
@@ -96,6 +113,10 @@
             <div class="txt"><h3>A clean PDF for the ticket</h3><p>Ticket, environment, tester, date, overall result and summary up front, then every step with its screenshot, note and status.</p></div>
             <div class="frame"><img src="assets/shot-pdf.jpg" width="1280" height="800" loading="lazy" alt="Two pages of an exported PDF report showing a summary with a green Pass badge and the first two steps with screenshots"></div>
           </div>
+          <div class="shot">
+            <div class="txt"><h3>Or turn it into a guide</h3><p>The same recording becomes a how-to. Numbered steps, tips and warnings, and a zoom on the part that matters, with no test results.</p></div>
+            <div class="frame"><img src="assets/shot-guide.jpg" width="1280" height="800" loading="lazy" alt="Two pages of an exported how-to guide: a title page with author, version and a Before you start box, and a step with a warning callout and a zoomed screenshot of a currency field"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -120,7 +141,8 @@
         <details><summary>Does Testimony send my screenshots anywhere?</summary><p>No. Everything stays in your browser on your computer, and the extension makes no network requests. You choose where the PDF goes.</p></details>
         <details><summary>Why does it ask for permission for each site?</summary><p>So it can only see the sites you are testing. Chrome shows the request once per site, and you can remove a site from the popup at any time.</p></details>
         <details><summary>Does it record what I type into fields?</summary><p>No. It records that you typed in a named field, never the text. Screenshots do show what is on screen, so use the redact tool before sharing a PDF if a screen contains sensitive information.</p></details>
-        <details><summary>Where do I use the PDF?</summary><p>Anywhere that accepts a file: attach it to a Jira or other ticket, add it to a test run, or send it to a stakeholder as sign-off evidence.</p></details>
+        <details><summary>What is the difference between a guide and a test run?</summary><p>A guide is a how-to for other people: instructions, tips and warnings, with no results. A test run is evidence for a ticket: environment, Pass or Fail for each step, and expected against actual results. You can switch a recording between them at any time.</p></details>
+        <details><summary>Where do I use the PDF?</summary><p>Anywhere that accepts a file. Attach test evidence to a Jira or other ticket or send it to a stakeholder as sign-off. Publish a guide in your wiki, intranet or onboarding pack.</p></details>
         <details><summary>Which browsers does it support?</summary><p>Google Chrome 102 or later.</p></details>
         <details><summary>Can I change the keyboard shortcuts?</summary><p>Yes, at chrome://extensions/shortcuts. The defaults are Alt+Shift+S to capture a screenshot and Alt+Shift+R to stop or start recording.</p></details>
       </div>

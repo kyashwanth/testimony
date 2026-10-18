@@ -6,9 +6,13 @@
 
 **Website:** https://kyashwanth.github.io/testimony/  ·  [Privacy policy](https://kyashwanth.github.io/testimony/privacy.html)
 
-Testimony is a Chrome extension that turns a manual test session into proof you can attach to a ticket.
-Click through your test as normal and it captures each step with a screenshot. Then add notes, mark each
-step Pass or Fail, annotate the screenshots, and download everything as a single PDF.
+Testimony is a Chrome extension that turns what you do in the browser into a document. Click through a task and
+it captures each step with a screenshot. Then choose what to make:
+
+- **A guide:** a clean step-by-step how-to or SOP, with tips and warnings.
+- **Test evidence:** proof you can attach to a ticket, with Pass or Fail for each step.
+
+Annotate the screenshots, add your notes, and download everything as a single PDF.
 
 **Install:** from the Chrome Web Store (the link will be added here once the listing is live).
 Early testers can download the latest zip from [Releases](https://github.com/kyashwanth/testimony/releases); the
@@ -16,14 +20,30 @@ release notes explain how to load it. Requires Chrome 102 or later.
 
 ## Quick start
 
-1. Open the site you are testing and click the Testimony icon in the toolbar.
-2. Enter the **ticket** and **environment** (for example `PROJ-123` and `UAT, build 2026.10.18`).
+1. Open the site you are using and click the Testimony icon in the toolbar.
+2. Choose **Create a guide** or **Run a test**. For a guide, give it a title. For a test, enter the **ticket** and
+   **environment** (for example `PROJ-123` and `UAT, build 2026.10.18`).
 3. Press **Allow site & start recording**. Chrome asks you to allow Testimony on that one site. Approve it.
-4. Test as you normally would. Every click, typed field and dropdown choice becomes a step with a screenshot.
+4. Work as you normally would. Every click, typed field and dropdown choice becomes a step with a screenshot.
 5. Press the icon again and choose **Stop & review**. The editor opens with all your steps.
-6. Add notes, mark steps **Pass** or **Fail**, annotate the screenshots, then press **Download PDF**.
+6. Edit, annotate, then press **Download PDF**.
 
-Attach the PDF to your ticket, or paste it into your test management tool.
+Attach a test PDF to your ticket, or publish a guide wherever your team keeps its how-tos.
+
+## Two modes
+
+Switch at any time with the **Guide / Test run** buttons in the popup or at the top of the editor. The mode only
+changes how the session is edited and exported, so one recording can become either document and nothing is lost
+when you switch.
+
+| | Guide (how-to or SOP) | Test run (evidence) |
+|---|---|---|
+| Purpose | Teach someone how to do something | Prove a test passed or failed |
+| Details | Title, overview, author, version, last updated, what to know first | Ticket, environment, tester, date, overall result |
+| Each step | The instruction, plus an optional **tip, warning or note** | Pass or Fail, **expected** and **actual**, notes |
+| Extras | Section headings, text-only paragraphs, **zoom to the clicked area** | Overall result worked out from the steps |
+| Final screenshot | Off by default | On by default |
+| PDF | A clean numbered how-to with no results | An evidence report with the result badge |
 
 ## What Testimony records
 
@@ -50,13 +70,17 @@ In the editor you can:
 - Mark each step **Pass** or **Fail**. The overall result is worked out from the steps, or you can set it
   yourself to Pass, Fail or Blocked.
 - Fill in the ticket, environment, tester, date and an optional summary. These appear at the top of the PDF.
+- In a **guide**: edit each instruction, add a tip, warning or note, **zoom** into the clicked area, and add section
+  headings or paragraphs that have no screenshot.
+- In a **test run**: write what you expected and what actually happened for each step.
 - Click any screenshot to **annotate** it with a box, arrow, circle, highlight or text label, in five colours.
   Use **Redact** to black out anything sensitive before you export.
 - Move steps up or down, or delete them.
 - Add extra screenshots by pasting, dropping or uploading images.
 
-The PDF contains the ticket, environment, tester, date, overall result and summary, followed by every step
-with its screenshot, note, page address and Pass or Fail status.
+A test PDF contains the ticket, environment, tester, date, overall result and summary, followed by every step
+with its screenshot, expected and actual results, note, page address and Pass or Fail status. A guide PDF has the
+title, author, version, overview and prerequisites, then numbered steps with their tips and warnings.
 
 ## Sessions and History
 
@@ -112,6 +136,10 @@ the first recording from the popup, after which the shortcut works on that site.
 **The screenshot shows the page before it finished updating.** Increase the delay under **Options** in the
 popup, for example to 1.5 or 3 seconds.
 
+**A step shows a grey "Screenshot could not be captured" picture.** Chrome refused the screenshot, usually
+because a page was closing or the browser was busy. The step is kept so your sequence is complete. Capture the
+screen again with `Alt+Shift+S` and replace the picture by pasting it into the editor.
+
 **Some characters in the PDF show as `?`.** The PDF supports Latin characters. Other scripts and emoji in
 titles or notes are replaced with `?`.
 
@@ -123,8 +151,9 @@ or remove the extension to erase everything.
 ## Limitations
 
 - Typing in rich-text editors and Tab key presses are not recorded as steps. Use `Alt+Shift+S` for those.
-- Doing the same thing twice within about half a second (a double-click) is recorded as one step.
-- Chrome limits how fast screenshots can be taken, so very fast sequences are spaced out. They stay in order.
+- A true double-click is recorded as one step. Two separate clicks are two steps, even quick ones.
+- Chrome allows only about two screenshots per second. In a very fast sequence every action is still recorded, in
+  order, but the screenshots are spaced out, and each is taken just before your next action.
 
 ## Feedback and support
 

@@ -84,11 +84,38 @@ export function drawAnnotations(ctx, list, k = 1) {
   ctx.restore();
 }
 
-// Sizes `canvas` to the screenshot (times k) and paints image + annotations.
-export function renderStep(canvas, bitmap, list, k = 1) {
-  canvas.width = Math.round(bitmap.width * k);
-  canvas.height = Math.round(bitmap.height * k);
+// The region to zoom to for a step with "Zoom to the clicked area" on: about 45% of the screenshot, centred on the
+// click marker or highlighted field, keeping the screenshot's proportions. Null when there is nothing to zoom to.
+export function cropFor(step, w, h) {
+  if (!step || !step.zoom) return null;
+  const mark = (step.annotations || []).find((a) => a.type === 'ring' || a.type === 'rect');
+  if (!mark) return null;
+  const cx = mark.type === 'ring' ? mark.x : mark.x + mark.w / 2;
+  const cy = mark.type === 'ring' ? mark.y : mark.y + mark.h / 2;
+  const cw = Math.max(Math.round(w * 0.45), Math.min(w, 640));
+  const ch = Math.round((cw * h) / w);
+  return {
+    x: Math.round(Math.min(Math.max(cx - cw / 2, 0), w - cw)),
+    y: Math.round(Math.min(Math.max(cy - ch / 2, 0), h - ch)),
+    w: cw,
+    h: ch,
+  };
+}
+
+// Sizes `canvas` to the screenshot (times k) and paints image + annotations. With `crop` ({x,y,w,h} in screenshot
+// pixels) only that region is drawn, and the annotations move with it.
+export function renderStep(canvas, bitmap, list, k = 1, crop = null) {
+  const sx = crop ? crop.x : 0;
+  const sy = crop ? crop.y : 0;
+  const sw = crop ? crop.w : bitmap.width;
+  const sh = crop ? crop.h : bitmap.height;
+  canvas.width = Math.round(sw * k);
+  canvas.height = Math.round(sh * k);
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  drawAnnotations(ctx, list, k);
+  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.translate(-sx, -sy);
+  for (const a of list) drawAnnotation(ctx, a);
+  ctx.restore();
 }

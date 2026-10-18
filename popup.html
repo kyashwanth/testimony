@@ -8,9 +8,18 @@
 <body>
   <h1>Testimony</h1>
   <p class="tagline">Pics or It Didn't Happen</p>
-  <div class="row">
+
+  <div class="modes" role="group" aria-label="What are you doing?">
+    <button id="modeGuide" data-mode="guide" type="button">Create a guide</button>
+    <button id="modeTest" data-mode="test" type="button">Run a test</button>
+  </div>
+
+  <div class="row" id="testFields">
     <label>Ticket<input id="ticket" placeholder="PROJ-123" autocomplete="off"></label>
     <label>Environment<input id="env" placeholder="UAT / build" autocomplete="off"></label>
+  </div>
+  <div class="row" id="guideFields" hidden>
+    <label>Guide title<input id="guideTitle" placeholder="How to raise an order" autocomplete="off"></label>
   </div>
 
   <section class="site" aria-live="polite">
@@ -39,7 +48,7 @@
         <option value="3000">After 3 s</option>
       </select>
     </label>
-    <label class="check"><input type="checkbox" id="finalShot"> Add a final screenshot when I stop</label>
+    <label class="check"><input type="checkbox" id="finalShot"> <span id="finalLabel">Add a final screenshot when I stop</span></label>
     <p class="hint">A short delay lets toasts and new rows appear before the screenshot. Typing is always captured at once.</p>
   </details>
 

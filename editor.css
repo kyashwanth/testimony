@@ -16,6 +16,7 @@ main { max-width: 980px; margin: 0 auto; padding: 20px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
 .meta { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; padding: 16px; margin-bottom: 20px; }
 .meta .wide { grid-column: 1 / -1; }
+.meta .span2 { grid-column: span 2; }
 @media (max-width: 820px) { .meta { grid-template-columns: 1fr 1fr; } }
 label { font-size: 12px; color: var(--grey); display: block; }
 .opt { opacity: .7; }
@@ -82,3 +83,27 @@ button:disabled { opacity: .55; cursor: default; }
 .annot-wrap { position: relative; line-height: 0; }
 .annot-wrap canvas { max-width: calc(100vw - 32px); max-height: calc(100vh - 100px); cursor: crosshair; touch-action: none; }
 .annot-text { position: absolute; width: 260px; margin: 0; padding: 2px 6px; line-height: 1.2; font-weight: 600; border-radius: 6px; z-index: 2; }
+
+/* modes */
+body.mode-guide [data-only="test"], body.mode-test [data-only="guide"] { display: none !important; }
+.modes { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-left: 10px; }
+.modes button { border: 0; border-radius: 0; padding: 6px 14px; background: transparent; font-weight: 500; }
+.modes button + button { border-left: 1px solid var(--line); }
+.modes button.on { background: var(--accent); color: #fff; font-weight: 600; }
+.tools { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; flex-wrap: wrap; }
+.tools .hint { margin: 0; }
+
+/* step cards that are not screenshots, and the guide controls */
+.step.heading .title { font-size: 18px; }
+.step.heading .num, .step.text .num { background: var(--grey); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
+.cols textarea { margin: 4px 0 0; }
+.cols label, .callout label { font-size: 12px; color: var(--grey); display: block; }
+.step textarea.notes { margin: 0 0 10px; }
+.callout { display: grid; grid-template-columns: 150px 1fr; gap: 12px; margin: 10px 0; align-items: start; }
+.callout textarea { margin: 4px 0 0; }
+.zoom { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 13px; color: var(--ink); }
+.zoom input { width: auto; margin: 0; }
+@media (max-width: 820px) { .cols, .callout { grid-template-columns: 1fr; } }
+
+[hidden] { display: none !important; }

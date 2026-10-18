@@ -10,6 +10,10 @@
   <header class="topbar">
     <div class="brand">Testimony <span class="tag">Pics or It Didn't Happen</span></div>
     <span id="recPill" class="pill" hidden>Recording</span>
+    <div class="modes" role="group" aria-label="Document type">
+      <button id="edGuide" data-mode="guide" type="button" title="A how-to or SOP: instructions, tips and warnings">Guide</button>
+      <button id="edTest" data-mode="test" type="button" title="Evidence for a test run: result, Pass/Fail, expected vs actual">Test run</button>
+    </div>
     <div class="spacer"></div>
     <button id="btnAdd" class="ghost">Add images</button>
     <input id="fileInput" type="file" accept="image/*" multiple hidden>
@@ -19,12 +23,17 @@
   </header>
 
   <main>
-    <section class="card meta" aria-label="Session details">
-      <label>Ticket<input id="ticket" placeholder="PROJ-123" autocomplete="off"></label>
-      <label>Environment / build<input id="env" placeholder="UAT, build 2026.09.19" autocomplete="off"></label>
-      <label>Tested by<input id="tester" placeholder="Your name" autocomplete="off"></label>
-      <label>Date<input id="date" type="date"></label>
-      <label>Overall result
+    <section class="card meta" aria-label="Details">
+      <label data-only="guide" class="span2">Guide title<input id="guideTitle" placeholder="How to raise an order" autocomplete="off"></label>
+      <label data-only="guide">Author<input id="author" placeholder="Your name" autocomplete="off"></label>
+      <label data-only="guide">Version<input id="version" placeholder="1.0" autocomplete="off"></label>
+
+      <label data-only="test">Ticket<input id="ticket" placeholder="PROJ-123" autocomplete="off"></label>
+      <label data-only="test">Environment / build<input id="env" placeholder="UAT, build 2026.09.19" autocomplete="off"></label>
+      <label data-only="test">Tested by<input id="tester" placeholder="Your name" autocomplete="off"></label>
+
+      <label><span id="dateLabel">Date</span><input id="date" type="date"></label>
+      <label data-only="test">Overall result
         <select id="result">
           <option value="">Auto (from steps)</option>
           <option value="pass">Pass</option>
@@ -32,15 +41,25 @@
           <option value="blocked">Blocked</option>
         </select>
       </label>
-      <label class="wide">Summary <span class="opt">(optional)</span>
+      <label class="wide"><span id="summaryLabel">Summary</span> <span class="opt">(optional)</span>
         <textarea id="summary" rows="2" placeholder="What was tested, and anything worth knowing."></textarea>
+      </label>
+      <label data-only="guide" class="wide">Before you start <span class="opt">(optional prerequisites)</span>
+        <textarea id="prereq" rows="2" placeholder="Access, data or setup the reader needs first."></textarea>
       </label>
     </section>
 
     <div id="empty" class="empty" hidden>
       <h2>No steps yet</h2>
-      <p>Click the extension icon, press <b>Start recording</b>, and click through your test. Each click becomes a step with a screenshot.</p>
+      <p data-only="test">Click the extension icon, choose <b>Run a test</b>, press <b>Start recording</b>, and click through your test. Each click becomes a step with a screenshot.</p>
+      <p data-only="guide">Click the extension icon, choose <b>Create a guide</b>, press <b>Start recording</b>, and do the task as you would show it. Each action becomes a step with a screenshot.</p>
       <p>You can also <b>paste</b> (Ctrl/Cmd+V) or <b>drop</b> screenshots onto this page.</p>
+    </div>
+
+    <div id="guideTools" class="tools" data-only="guide">
+      <button id="addHeading" class="ghost" type="button">Add heading</button>
+      <button id="addText" class="ghost" type="button">Add text</button>
+      <span class="hint">Headings split a long guide into sections. Text adds a paragraph with no screenshot.</span>
     </div>
     <div id="steps"></div>
   </main>
