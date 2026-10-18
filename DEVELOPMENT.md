@@ -34,7 +34,6 @@ the console of the page being tested.
 | `docs/` | The website served by GitHub Pages: landing page and privacy policy |
 | `.github/workflows/` | CI (tests and package build) and the tag-triggered release |
 | `build.sh` | Runs all tests and writes the store zip |
-| `STORE-LISTING.md` | Copy and justifications for the Chrome Web Store form |
 | `PRIVACY.md` | Privacy policy (also the text to host for the store listing) |
 
 ## Tests
@@ -175,8 +174,8 @@ Notes:
 4. Tag and push: `git tag v<version> && git push origin v<version>`. The **Release** workflow publishes
    `testimony-<version>.zip` at https://github.com/kyashwanth/testimony/releases.
 5. Download that zip from the release and upload **that exact file** in the Chrome Web Store Developer Dashboard.
-6. Update the listing text from [`STORE-LISTING.md`](STORE-LISTING.md) if features or permissions changed, and
-   make sure the privacy declarations still match the code.
+6. Update the Chrome Web Store listing text if features or permissions changed, and make sure the privacy
+   declarations still match the code.
 
 You can still build locally with `./build.sh`, for quick testing.
 
