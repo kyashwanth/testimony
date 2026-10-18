@@ -18,6 +18,9 @@
   <button id="open">Open file</button>
   <button id="vanish">Remove me</button>
   <button id="blocked">Blocked by page</button>
+  <a id="spa" href="/orders">Orders</a>
+  <a id="hash" href="#top">Jump to top</a>
+  <a id="menu" href="/menu" aria-haspopup="true">Menu</a>
   <input id="email" placeholder="Email address" style="width:200px">
 </div>
 <div id="toast">Done</div>
@@ -27,7 +30,7 @@ const params = new URLSearchParams(location.search);
 window.__msgs = [];
 const startupDelay = Number(params.get('startupDelay') || 0); // how long "storage" takes to answer
 window.chrome = {
-  runtime: { id: 'test', sendMessage: (m) => { window.__msgs.push(m); return Promise.resolve(); }, onMessage: { addListener() {} } },
+  runtime: { id: 'test', sendMessage: (m) => { window.__msgs.push(m); (window.__times = window.__times || []).push(Math.round(performance.now())); return Promise.resolve(); }, onMessage: { addListener() {} } },
   storage: {
     local: { get: () => new Promise((r) => setTimeout(() => r({ recording: true }), startupDelay)) },
     onChanged: { addListener() {} },
@@ -41,6 +44,9 @@ document.querySelectorAll('.del').forEach((b) => b.addEventListener('click', () 
 let n = 0; document.getElementById('plus').addEventListener('click', () => { document.getElementById('count').textContent = ++n; });
 // a button that acts on mouse-down and removes itself, so no normal click ever reaches it
 document.getElementById('vanish').addEventListener('mousedown', (e) => { e.target.remove(); const t = document.getElementById('toast'); t.style.display = 'block'; });
+// a link routed by script (like a single-page app): the URL changes and the content is replaced, with no reload
+document.getElementById('spa').addEventListener('click', (e) => { e.preventDefault(); history.pushState({}, '', '/orders'); document.getElementById('list').textContent = 'Orders page'; });
+document.getElementById('menu').addEventListener('click', (e) => e.preventDefault());
 // a page that swallows clicks before they reach anything else
 window.addEventListener('click', (e) => { if (e.target.id === 'blocked') { e.stopImmediatePropagation(); e.stopPropagation(); } }, true);
 </script>

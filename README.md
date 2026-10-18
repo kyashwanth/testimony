@@ -52,6 +52,7 @@ when you switch.
 | Click a button or link | "Click the 'Save' button", with a red marker on the click |
 | Type in a field and move on | "Typed in the 'Email' field", with the field boxed |
 | Press Enter in a field | "Pressed Enter in the 'Search' field" |
+| Click a link | "Click the 'Orders' link", photographed **as you click**, so the screenshot shows the link on the page you left |
 | Choose from a dropdown | "Selected 'INR' in the 'Currency' dropdown" |
 | Press Stop | A "Final state" screenshot, so the session ends with the outcome on screen |
 
@@ -158,6 +159,10 @@ or remove the extension to erase everything.
 ## Feedback and support
 
 Found a problem or have an idea? Please open an issue at
+**A step says "Page changed after this click".** The page navigated before the screenshot could be taken, so the picture
+shows the next page and a click marker would point at the wrong thing. Links are normally photographed as you click
+to avoid this; it mostly happens with buttons that move you to another page. The next step shows where you landed.
+
 [github.com/kyashwanth/testimony/issues](https://github.com/kyashwanth/testimony/issues).
 
 If Testimony saves you time and you would like to say thanks, you can

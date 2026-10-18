@@ -8,6 +8,8 @@ node test/tabs.test.mjs >/dev/null && echo "tab tests passed"
 node test/capture.test.mjs >/dev/null && echo "capture tests passed"
 node test/history.test.mjs >/dev/null && echo "history tests passed"
 node test/fastclicks.test.mjs >/dev/null 2>&1 && echo "fast click tests passed"
+node test/navclicks.test.mjs >/dev/null 2>&1 && echo "link click tests passed"
+node test/recorder.test.mjs >/dev/null 2>&1 && echo "recorder tests passed"
 node test/modes.test.mjs >/dev/null && echo "mode tests passed"
 node test/pdf.test.mjs >/dev/null && rm -f test/out.pdf && echo "pdf test passed"
 V=$(node -p "require('./manifest.json').version")

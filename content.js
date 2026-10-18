@@ -147,8 +147,12 @@
   }
 
   // kind: 'click' | 'key' (Enter: the page is about to react, so the screenshot waits) | 'input' (typing/dropdown: immediate)
-  function report(kind, title, { point = null, rect = null } = {}) {
+  // `nav`: the click is on a link, so the page is about to change and the screenshot must not wait. `pre`: id of the
+  // early screenshot requested when the mouse went down, which this step should use.
+  function report(kind, title, { point = null, rect = null, nav = false, pre = null } = {}) {
     const msg = { type: 'click-step', id: newId(), kind, title, url: location.href, pageTitle: document.title, point, rect };
+    if (nav) msg.nav = true;
+    if (pre) msg.pre = pre;
     ready.then(() => { if (recording) send(msg); });
   }
 
@@ -167,6 +171,15 @@
   let forwardedAt = 0;
   let lastClick = { title: null, x: 0, y: 0, at: 0 };
 
+  // A link with a real destination will replace the page. Same-page anchors (#...), script links, mail/phone links,
+  // downloads and menu toggles stay on the page, so their result (an opened menu, a toast) is still worth waiting for.
+  function likelyNavigates(el) {
+    const a = el.closest('a[href]');
+    if (!a || a.hasAttribute('download') || a.hasAttribute('aria-haspopup') || a.hasAttribute('aria-expanded')) return false;
+    const href = (a.getAttribute('href') || '').trim();
+    return !!href && !href.startsWith('#') && !/^(javascript|mailto|tel):/i.test(href);
+  }
+
   // Everything we need to describe an action, worked out immediately because the page may change the DOM next.
   function snapshot(raw, e, keyboard) {
     let el = raw.closest(INTERACTIVE) || raw;
@@ -177,7 +190,7 @@
       ? centerOf(el)
       : frame ? { x: e.clientX + frame.ox, y: e.clientY + frame.oy, vw: frame.vw, vh: frame.vh } : null;
     // Typing and dropdown choices are recorded from their own events. The click that focuses them is noise.
-    return { el, viaLabel, title: describeClick(el), point, skip: isTextField(el) || isSelect(el) };
+    return { el, viaLabel, title: describeClick(el), point, nav: likelyNavigates(el), skip: isTextField(el) || isSelect(el) };
   }
 
   const targetOf = (e) => (e.target instanceof Element ? e.target : e.target && e.target.parentElement);
@@ -188,7 +201,17 @@
     if (!raw) return;
     const snap = snapshot(raw, e, false);
     if (snap.skip) return;
-    const press = { ...snap, pointerId: e.pointerId, at: Date.now(), done: false, released: false };
+    const now = Date.now();
+    const press = { ...snap, pointerId: e.pointerId, at: now, done: false, released: false, pre: null };
+    // The second press of a double-click is collapsed into the first step, so it needs no early screenshot of its own.
+    const repeat = snap.title === lastClick.title && now - lastClick.at < 300 && snap.point
+      && Math.abs(snap.point.x - lastClick.x) < 8 && Math.abs(snap.point.y - lastClick.y) < 8;
+    if (snap.nav && !repeat) {
+      // The page is about to change: ask for a screenshot now, while the link is still on screen. The click that
+      // follows will reuse it (it is thrown away if no click comes, e.g. a drag).
+      press.pre = newId();
+      ready.then(() => { if (recording) send({ type: 'pre-shot', id: press.pre }); });
+    }
     presses.add(press);
     setTimeout(() => presses.delete(press), 3000);
   }, true);
@@ -200,7 +223,7 @@
     press.released = true;
     setTimeout(() => {
       // A normal click arrives within a few milliseconds. If none did and the element is gone, the page swallowed it.
-      if (!press.done && !press.el.isConnected) { press.done = true; report('click', press.title, { point: press.point }); }
+      if (!press.done && !press.el.isConnected) { press.done = true; report('click', press.title, { point: press.point, nav: press.nav, pre: press.pre }); }
     }, 350);
   }, true);
 
@@ -230,7 +253,7 @@
     if (e.detail > 1 && snap.title === lastClick.title && sameSpot && now - lastClick.at < 300) return;
     lastClick = { title: snap.title, x: spot.x, y: spot.y, at: now };
 
-    report('click', snap.title, { point: snap.point });
+    report('click', snap.title, { point: snap.point, nav: snap.nav, pre: press ? press.pre : null });
   }
   window.addEventListener('click', onClick, true);
 

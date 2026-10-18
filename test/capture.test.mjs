@@ -92,8 +92,9 @@ await click('Click navigates');
 await settle(80);
 t.state.tabs[0].url = 'https://uat.example.com/b'; // page navigated before the delayed screenshot
 await until(() => steps().length === 1);
-assert.equal(steps()[0].annotations.length, 0, 'marker dropped: it would point at different content');
-console.log('ok  marker is dropped when the page navigated during the delay');
+assert.ok(!steps()[0].annotations.some((a) => a.type === 'ring' || a.type === 'rect'), 'no marker: it would point at different content');
+assert.ok(steps()[0].annotations.some((a) => a.type === 'text' && /page changed/i.test(a.text)), 'but a label says why');
+console.log('ok  no misleading marker when the page navigated during the delay, and a label explains it');
 
 // 6. Rapid actions are all kept, in event order, including repeats of the same control
 //    (collapsing a true double-click happens in the recorder, which can tell from the browser)

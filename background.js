@@ -10,7 +10,7 @@
 // (site not allowed, browser page...) the badge shows "!" so the gap is never silent.
 import * as db from './db.js';
 import { COLORS, baseLW } from './annotate.js';
-import { patternForUrl, webOrigins } from './sites.js';
+import { patternForUrl, webOrigins, samePage } from './sites.js';
 import { modeOf } from './modes.js';
 import { PLACEHOLDER_DATA_URL, PLACEHOLDER_W, PLACEHOLDER_H } from './placeholder.js';
 
@@ -29,6 +29,8 @@ const SETTINGS_DEFAULTS = { captureDelayMs: 700, finalShot: true, finalShotGuide
 let shotTimes = [];                   // when recent captureVisibleTab calls were made (for the quota)
 let arrivals = [];                    // when recent user actions arrived (so a step is shot before the next one)
 const seenIds = new Set();            // message ids already handled, so a retried message is not recorded twice
+const preShots = new Map();           // press id -> screenshot taken at a mouse press on a link, before the page can change
+const PRESHOT_TTL_MS = 8000;
 let queue = Promise.resolve();
 let stopping = false;                 // while stopping, pending delayed captures are taken immediately
 
@@ -128,10 +130,12 @@ function nextShotSlot(now = Date.now()) {
   return shotTimes.length >= SHOT_BURST ? shotTimes[shotTimes.length - SHOT_BURST] + SHOT_WINDOW_MS : 0;
 }
 
-async function waitForShotSlot() {
+// Waits for a slot and takes it in the same step, so two screenshots requested at once (a press on a link while a
+// delayed capture is waiting) can never both claim the same slot and trip the quota.
+async function reserveShotSlot() {
   for (;;) {
     const wait = nextShotSlot() - Date.now();
-    if (wait <= 0) return;
+    if (wait <= 0) { shotTimes.push(Date.now()); return; }
     await sleep(Math.min(wait, 50));
   }
 }
@@ -164,8 +168,7 @@ async function takeScreenshot(windowId) {
   let lastError;
   for (let attempt = 0; attempt < SHOT_ATTEMPTS; attempt++) {
     if (attempt) await sleep(300);
-    await waitForShotSlot();
-    shotTimes.push(Date.now());
+    await reserveShotSlot();
     try {
       return await withTimeout(screenshot(windowId), SHOT_TIMEOUT_MS);
     } catch (err) {
@@ -180,22 +183,40 @@ async function takeScreenshot(windowId) {
 
 // Takes the screenshot and stores the step. `delayMs` waits after the event so the page can react
 // (toast, new row...) before the screenshot; clicks and Enter use the user's setting, typing uses none.
-async function addCapture({ windowId, tabId, title, url, tabUrl, pageTitle, point, rect, kind, eventAt = Date.now(), delayMs = 0 }) {
-  await waitUntilDue(eventAt, delayMs);
-  const shot = await takeScreenshot(windowId);
+async function addCapture({ windowId, tabId, title, url, tabUrl, pageTitle, point, rect, kind, eventAt = Date.now(), delayMs = 0, preId }) {
+  // A link was pressed: its screenshot was taken at the press, before the page could change. Use it if it is good.
+  let shot = null;
+  let early = false;
+  if (preId && preShots.has(preId)) {
+    const pre = await preShots.get(preId).promise;
+    preShots.delete(preId);
+    if (pre && !pre.failed) { shot = pre; early = true; }
+  }
+  if (!shot) {
+    await waitUntilDue(eventAt, delayMs);
+    shot = await takeScreenshot(windowId);
+  }
   const tab = await tabNumber(tabId);
 
-  // If the page navigated during the delay, a marker placed at click time would point at unrelated content.
+  // If the page navigated during the delay, the screenshot shows the NEXT page, so a marker placed at click time
+  // would point at unrelated content. The marker is left off and the step says why, rather than silently lacking it.
   let keepMarks = !shot.failed;
-  if (keepMarks && delayMs > 0 && tabUrl) {
+  let navigated = false;
+  // Checked for every screenshot that was not taken early, even an immediate one (a link opened with the keyboard has
+  // no press to photograph, so its screenshot can still race the navigation). A change to only the #hash or ?query is
+  // the same page, so it does not count.
+  if (keepMarks && !early && tabUrl) {
     const now = await chrome.tabs.get(tabId).catch(() => null);
-    keepMarks = !now || !now.url || now.url === tabUrl;
+    navigated = !!(now && now.url && !samePage(now.url, tabUrl));
+    keepMarks = !navigated;
   }
 
   const annotations = [];
   const lw = baseLW(shot.w);
   if (shot.failed) {
     annotations.push({ type: 'text', color: '#b45309', text: 'Screenshot could not be captured', x: 36, y: 168, size: 26 });
+  } else if (navigated) {
+    annotations.push({ type: 'text', color: '#b45309', text: 'Page changed after this click', x: Math.round(shot.w * 0.02), y: Math.round(shot.h * 0.02), size: Math.max(18, Math.round(shot.w / 70)) });
   } else if (keepMarks && rect) {
     const k = shot.w / rect.vw;
     annotations.push({
@@ -337,9 +358,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await addCapture({
           windowId: sender.tab.windowId, tabId: sender.tab.id, kind: msg.kind || 'click', title: msg.title,
           url: msg.url, tabUrl: sender.tab.url, pageTitle: msg.pageTitle, point: msg.point, rect: msg.rect,
-          eventAt, delayMs: msg.kind === 'input' ? 0 : captureDelayMs,
+          eventAt, preId: msg.pre,
+          // typing and link clicks are photographed at once: a link changes the page, so waiting would photograph the next one
+          delayMs: msg.kind === 'input' || msg.nav ? 0 : captureDelayMs,
         });
       });
+      return false;
+    }
+    case 'pre-shot': {
+      // The mouse went down on a link. Photograph the page now, before the click can navigate away from it. The click
+      // that follows (message carries `pre`) uses this picture; a press that is not followed by a click is discarded.
+      // A repeated id (the recorder retries a message) must not replace the earlier screenshot with a later one.
+      if (!(sender.tab && sender.tab.active) || !msg.id || preShots.has(msg.id)) return false;
+      const { windowId } = sender.tab;
+      const tabRef = sender.tab;
+      preShots.set(msg.id, {
+        promise: readScope().then((scope) => (inScope(scope, tabRef) ? takeScreenshot(windowId) : null)).catch(() => null),
+      });
+      setTimeout(() => preShots.delete(msg.id), PRESHOT_TTL_MS);
       return false;
     }
     case 'start': setRecording(true).then(() => sendResponse({ ok: true })); return true;

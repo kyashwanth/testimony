@@ -36,3 +36,14 @@ export const webOrigins = (origins = []) =>
 
 // "https://uat.example.com/*" -> "uat.example.com"
 export const label = (pattern) => pattern.replace(/^(\*|https?):\/\//, (m) => (m.startsWith('http:') ? 'http://' : '')).replace(/\/\*$/, '');
+
+// Do two URLs address the same page? Only the origin and path decide: a change to just the #hash or the ?query
+// (an in-page tab, a sort order, a filter) updates the address bar without replacing what the user was looking at.
+export function samePage(a, b) {
+  try {
+    const x = new URL(a), y = new URL(b);
+    return x.origin === y.origin && x.pathname === y.pathname;
+  } catch {
+    return a === b;
+  }
+}

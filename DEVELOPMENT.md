@@ -53,6 +53,8 @@ node test/modes.test.mjs        # mode helpers, zoom crop, guide and evidence PD
 node test/pdf.test.mjs          # PDF structure and tab labels
 ```
 
+node test/recorder.test.mjs     # the real content.js in a sandbox: link detection, early screenshots, double-clicks
+node test/navclicks.test.mjs    # link clicks on the service-worker side: early screenshots, page-changed label
 The service worker tests run `background.js` against fakes of `chrome.*` and IndexedDB in
 `test/fakes.mjs`. They wait on conditions instead of fixed delays, because several features are timing-based.
 If you add one, avoid fixed `sleep`s that race the capture queue.
@@ -119,6 +121,14 @@ order, and respect Chrome's screenshot quota.
 - **Quota.** `captureVisibleTab` allows 2 calls per second. The worker allows a burst of 2 per 1.1 s window and
   waits for the next slot, so a burst is served as fast as Chrome permits without errors.
 - **Failures.** A failed screenshot is retried (3 attempts). If it still fails, the step is saved with the grey
+- **Links change the page.** A screenshot taken after the usual delay would show the *next* page, with no way to place
+  the click marker. The recorder therefore treats a click on a link with a real destination (not `#...`, `javascript:`,
+  `mailto:`, a download, or a menu toggle) specially: at the mouse *press* it asks the worker for an early
+  screenshot (`pre-shot` message), and the click that follows carries `nav: true` and the press id (`pre`) and uses that
+  picture, marker included, with no delay. A press that never becomes a click is discarded after 8 s. Taking the picture
+  at the press rather than the click gives it the 80 to 150 ms the button is held down as a head start on pages that
+  navigate instantly. If a page still changes during a normal delayed capture, the step carries a "Page changed after
+  this click" label instead of a misleading marker or silence.
   `placeholder.js` image, `captureFailed: true`, and a note drawn on it, rather than being lost.
 - A Stop right after a click cannot overtake it (events are queued synchronously), and a delayed capture drops its
   click marker if the tab navigated in the meantime.
